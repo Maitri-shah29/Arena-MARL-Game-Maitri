@@ -1,0 +1,61 @@
+# Unity generated folders (including nested Unity projects)
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Mm]emoryCaptures/
+**/[Rr]ecordings/
+**/[Uu]ser[Ss]ettings/
+**/[Ee]xported[Oo]bj/
+**/[Aa]ssets/StreamingAssets/
+
+# Unity generated and local project files
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+crashlytics-build.properties
+
+# Unity asset metadata generated for ignored assets
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# IDE and editor caches
+.vs/
+.idea/
+.vscode/
+**/.vs/
+**/.idea/
+**/.vscode/
+.consulo/
+**/.consulo/
+.gradle/
+**/.gradle/
+
+# Rider and Visual Studio generated Unity files
+**/[Aa]ssets/Plugins/Editor/JetBrains*
+**/[Aa]ssets/ML-Agents.meta
+**/[Aa]ssets/ML-Agents/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+

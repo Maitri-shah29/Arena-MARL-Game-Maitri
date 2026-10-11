@@ -35,6 +35,14 @@ public class AgentActions : MonoBehaviour
     private void Awake()
     {
         behaviorParameters = GetComponent<BehaviorParameters>();
+        if (GetComponent<AgentTacticalRing>() == null)
+        {
+            gameObject.AddComponent<AgentTacticalRing>();
+        }
+        if (!isHiding && GetComponent<SeekerLaserScanner>() == null)
+        {
+            gameObject.AddComponent<SeekerLaserScanner>();
+        }
     }
 
     private void FixedUpdate()

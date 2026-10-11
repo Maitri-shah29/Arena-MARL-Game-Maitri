@@ -47,6 +47,9 @@ public class MapGenerator : MonoBehaviour
     private const int numTriesBox = 15;
 
     private List<GameObject> generatedWalls = null;
+    private List<GameObject> layoutObjects = null;
+    private bool persistentLayout = false;
+    private bool boundaryReady = false;
 
     private AgentActions[] hiders = null;
     private AgentActions[] seekers = null;
@@ -56,6 +59,19 @@ public class MapGenerator : MonoBehaviour
     public int NumSeekers { get; private set; } = 0;
     public List<AgentActions> GetInstantiatedHiders() => hiders.ToList();
     public List<AgentActions> GetInstantiatedSeekers() => seekers.ToList();
+
+    // Read-only accessors for ArchitectManager and ArchitectCamera
+    public float AgentRadius  => agentRadius;
+    public float ObjectRadius => objectRadius;
+    public float MapSize      => mapSize;
+    public float WallY        => wallY;
+    public float BoxY         => boxY;
+    public bool UsesPersistentLayout => persistentLayout;
+
+    public void SetPersistentLayout(bool enabled)
+    {
+        persistentLayout = enabled;
+    }
 
 
     private void Awake()
@@ -83,8 +99,22 @@ public class MapGenerator : MonoBehaviour
 
     public void Generate()
     {
+        if (persistentLayout)
+        {
+            EnsureBoundary();
+            PlaceAgentsOnly();
+            return;
+        }
+
+        if (PlayerLayout.TryLoad(out PlayerLayoutFile savedLayout))
+        {
+            GenerateSavedLayout(savedLayout);
+            return;
+        }
+
         generatedWalls?.ForEach((GameObject wall) => Destroy(wall));
         generatedWalls = new List<GameObject>();
+        DestroyLayoutObjects();
         GenerateMainRoom();
         
         if (instantiateBoxes)
@@ -104,6 +134,128 @@ public class MapGenerator : MonoBehaviour
         PlaceStuff();
     }
 
+
+    private void GenerateSavedLayout(PlayerLayoutFile layout)
+    {
+        generatedWalls?.ForEach((GameObject wall) => { if (wall != null) Destroy(wall); });
+        generatedWalls = new List<GameObject>();
+        DestroyLayoutObjects();
+        if (instantiateBoxes && boxes != null)
+        {
+            Array.ForEach(boxes, (BoxHolding box) => { if (box != null) Destroy(box.gameObject); });
+            boxes = null;
+        }
+
+        GenerateMainRoom();
+        layoutObjects = new List<GameObject>();
+        foreach (PlayerLayoutFile.Piece piece in layout.pieces)
+        {
+            if (piece == null)
+            {
+                continue;
+            }
+
+            Vector3 world = transform.TransformPoint(new Vector3(piece.px, piece.py, piece.pz));
+            Quaternion rotation = transform.rotation * new Quaternion(piece.rx, piece.ry, piece.rz, piece.rw);
+            if (piece.kind == "box" && boxPrefabs != null && boxPrefabs.Length > 0)
+            {
+                BoxHolding box = Instantiate(boxPrefabs[0], world, rotation, transform);
+                box.transform.localScale = new Vector3(piece.sx, piece.sy, piece.sz);
+                box.gameObject.AddComponent<ArchitectObject>();
+                if (piece.lockTeam == 1)
+                {
+                    box.ArchitectPreLock(true);
+                }
+                else if (piece.lockTeam == 2)
+                {
+                    box.ArchitectPreLock(false);
+                }
+                layoutObjects.Add(box.gameObject);
+            }
+            else if (wallPrefab != null)
+            {
+                GameObject wall = Instantiate(wallPrefab, world, rotation, transform);
+                wall.transform.localScale = new Vector3(piece.sx, piece.sy, piece.sz);
+                wall.AddComponent<ArchitectObject>();
+                layoutObjects.Add(wall);
+            }
+        }
+
+        PlaceAgentsOnly();
+    }
+
+    private void DestroyLayoutObjects()
+    {
+        if (layoutObjects == null)
+        {
+            return;
+        }
+
+        foreach (GameObject piece in layoutObjects)
+        {
+            if (piece != null)
+            {
+                Destroy(piece);
+            }
+        }
+        layoutObjects.Clear();
+    }
+
+    private void EnsureBoundary()
+    {
+        if (boundaryReady && generatedWalls != null && generatedWalls.Count > 0 && generatedWalls.TrueForAll(wall => wall != null))
+        {
+            return;
+        }
+
+        generatedWalls?.ForEach((GameObject wall) => { if (wall != null) Destroy(wall); });
+        generatedWalls = new List<GameObject>();
+        GenerateMainRoom();
+        boundaryReady = true;
+    }
+
+    private void PlaceAgentsOnly()
+    {
+        List<(Vector2, float)> itemPlacement = new List<(Vector2, float)>();
+        foreach (ArchitectObject piece in FindObjectsOfType<ArchitectObject>())
+        {
+            if (piece == null)
+            {
+                continue;
+            }
+
+            Vector3 local = piece.transform.position - transform.position;
+            float clearance = objectRadius;
+            Renderer pieceRenderer = piece.GetComponent<Renderer>();
+            if (pieceRenderer != null)
+            {
+                clearance = Mathf.Max(pieceRenderer.bounds.extents.x, pieceRenderer.bounds.extents.z) + agentRadius;
+            }
+            itemPlacement.Add((new Vector2(local.x, local.z), clearance));
+        }
+
+        NumHiders = Random.Range(numHidersMin, numHidersMax + 1);
+        NumSeekers = Random.Range(numSeekersMin, numSeekersMax + 1);
+        PlaceTeam(itemPlacement, NumHiders, PickPointHider, hiders, true);
+        PlaceTeam(itemPlacement, NumSeekers, PickPointSeeker, seekers, false);
+    }
+
+    private void PlaceTeam(List<(Vector2, float)> itemPlacement, int count, Func<Vector2> pickPoint, AgentActions[] team, bool hidersOnSouth)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (!TryPlaceObject(itemPlacement, pickPoint, agentRadius, numTriesAgent))
+            {
+                float edge = mapSize * 0.5f - agentRadius - 1f;
+                float along = Mathf.Lerp(-edge, edge, count <= 1 ? 0.5f : i / (float)(count - 1));
+                itemPlacement.Add((new Vector2(along, hidersOnSouth ? -edge : edge), agentRadius));
+            }
+
+            int id = itemPlacement.Count - 1;
+            team[i].transform.position = new Vector3(itemPlacement[id].Item1.x, agentY, itemPlacement[id].Item1.y) + transform.position;
+            team[i].transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+        }
+    }
 
     private void GenerateMainRoom()
     {
