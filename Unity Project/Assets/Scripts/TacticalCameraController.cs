@@ -143,19 +143,21 @@ public class TacticalCameraController : MonoBehaviour
 
         headerStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 15,
+            fontSize = 22,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleLeft
+            alignment = TextAnchor.MiddleLeft,
+            wordWrap = true
         };
-        headerStyle.normal.textColor = new Color(0f, 0.95f, 1f, 1f); // Neon Cyan
+        headerStyle.normal.textColor = Color.white;
 
         subStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 12,
-            fontStyle = FontStyle.Normal,
-            alignment = TextAnchor.MiddleLeft
+            fontSize = 18,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft,
+            wordWrap = true
         };
-        subStyle.normal.textColor = new Color(0.85f, 0.9f, 0.95f, 0.9f);
+        subStyle.normal.textColor = new Color(1f, 0.95f, 0.75f, 1f);
 
         boxStyle = new GUIStyle(GUI.skin.box);
         Texture2D darkBg = new Texture2D(1, 1);
@@ -170,8 +172,13 @@ public class TacticalCameraController : MonoBehaviour
     {
         InitStyles();
 
-        // Top-left tactical telemetry panel
-        GUILayout.BeginArea(new Rect(16, 16, 420, 120), boxStyle);
+        HumanPlayer player = FindObjectOfType<HumanPlayer>();
+        if (player != null && player.IsPlayingRound)
+        {
+            return;
+        }
+
+        GUILayout.BeginArea(new Rect(16, 16, 420, 110), boxStyle);
         GUILayout.BeginVertical();
 
         GUILayout.Label("ARENA // MARL SIMULATION PROTOCOL", headerStyle);

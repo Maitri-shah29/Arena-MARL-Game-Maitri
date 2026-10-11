@@ -31,6 +31,15 @@ public class BoxHolding : MonoBehaviour
     private AgentActions _architectSentinel = null;
 
 
+    public int ArchitectLockTeam
+    {
+        get
+        {
+            if (!_isArchitectLocked) return 0;
+            return tag == tagLockHider ? 1 : 2;
+        }
+    }
+
     public AgentActions Owner { get { return owner; } }
     public AgentActions LockOwner { get { return lockOwner; } }
     public Rigidbody Rigidbody { get { return rigidbody; } }
@@ -129,6 +138,19 @@ public class BoxHolding : MonoBehaviour
         _isArchitectLocked = false;
     }
 
+
+    public void RestorePlacedPose()
+    {
+        owner = null;
+        if (rigidbody != null)
+        {
+            rigidbody.velocity = Vector3.zero;
+            rigidbody.angularVelocity = Vector3.zero;
+            rigidbody.isKinematic = _isArchitectLocked;
+        }
+        transform.position = startPosition;
+        transform.rotation = startRotation;
+    }
 
     public void Reset()
     {

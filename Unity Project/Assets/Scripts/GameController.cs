@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,6 +11,8 @@ public class GameController : MonoBehaviour
 {
     [SerializeField] private int episodeSteps = 240;
     [SerializeField] private float gracePeriodFraction = 0.4f;
+    [SerializeField] private int playEpisodeSteps = 2500;
+    [SerializeField] private float playGracePeriodFraction = 0.12f;
     [SerializeField] private float coneAngle = 0.375f * 180f;
 
     [SerializeField] private MapGenerator mapGenerator = null;
@@ -75,15 +78,39 @@ public class GameController : MonoBehaviour
     private int stepsHidden = 0;
     private int hidersCaptured = 0;
     private bool hidersPerfectGame = true;
+    private bool roundOver = false;
     private StatsRecorder statsRecorder = null;
+
+    private int ActiveEpisodeSteps => inferenceMode ? playEpisodeSteps : episodeSteps;
+    private float ActiveGraceFraction => inferenceMode ? playGracePeriodFraction : gracePeriodFraction;
 
     public bool GracePeriodEnded
     {
-        get { return episodeTimer >= episodeSteps * gracePeriodFraction; }
+        get { return episodeTimer >= ActiveEpisodeSteps * ActiveGraceFraction; }
     }
+
+    public bool RoundSettled => roundOver;
 
     public bool DebugDrawBoxHold => debugDrawBoxHold;
     public bool DebugDrawIndividualReward => debugDrawIndividualReward;
+    public bool CaptureEnabled => allowCapture;
+    public int CapturedHiders => hidersCaptured;
+    public int HiderCount => hiders == null ? 0 : hiders.Count;
+    public string LastRoundSummary { get; private set; } = "";
+
+    public float HiddenPercent
+    {
+        get
+        {
+            if (!GracePeriodEnded)
+            {
+                return 100f;
+            }
+
+            float activeSteps = Mathf.Max(1f, episodeTimer - ActiveEpisodeSteps * ActiveGraceFraction);
+            return 100f * stepsHidden / activeSteps;
+        }
+    }
 
 
     private void Awake()
@@ -119,6 +146,13 @@ public class GameController : MonoBehaviour
         {
             hiderInstances.ForEach(hider => hider.SwitchToInference(hidersCheckpoint));
             seekerInstances.ForEach(hider => hider.SwitchToInference(seekersCheckpoint));
+            foreach (AgentActions agent in hiderInstances.Concat(seekerInstances))
+            {
+                if (agent.HideAndSeekAgent != null)
+                {
+                    agent.HideAndSeekAgent.MaxStep = 0;
+                }
+            }
         }
 
         hidersGroup = new SimpleMultiAgentGroup();
@@ -135,6 +169,31 @@ public class GameController : MonoBehaviour
         }
 
         ResetScene();
+
+        GenerationComparer comparer = null;
+        if (inferenceMode)
+        {
+            comparer = gameObject.AddComponent<GenerationComparer>();
+            comparer.Setup(hiderInstances, hidersCheckpoint, seekersCheckpoint);
+        }
+
+        if (inferenceMode)
+        {
+            if (architectManager == null)
+            {
+                architectManager = GetComponent<ArchitectManager>();
+            }
+
+            HumanPlayer player = GetComponent<HumanPlayer>();
+            if (player == null)
+            {
+                player = gameObject.AddComponent<HumanPlayer>();
+            }
+            NNModel playModel = comparer != null && comparer.CurrentModel != null
+                ? comparer.CurrentModel
+                : hidersCheckpoint;
+            player.Setup(this, architectManager, playModel, seekersCheckpoint);
+        }
     }
 
     private void Update()
@@ -151,6 +210,9 @@ public class GameController : MonoBehaviour
         // editing the arena) we must not advance the episode timer or compute
         // rewards. BeginArchitectPhase sets timeScale=0 so FixedUpdate normally
         // won't fire, but we guard here as a belt-and-suspenders safety measure.
+        if (roundOver)
+            return;
+
         if (architectManager != null && architectManager.architectEnabled && architectManager.IsArchitectPhase)
             return;
 
@@ -174,13 +236,7 @@ public class GameController : MonoBehaviour
         statsRecorder.Add("Environment/HidersMeanX", hidersMeanPosition.x);
         statsRecorder.Add("Environment/HidersMeanZ", hidersMeanPosition.z);
 
-        UpdateRewards();
-
-        if (episodeTimer >= episodeSteps)
-        {
-            EndEpisode();
-        }
-        else if (GracePeriodEnded)
+        if (GracePeriodEnded)
         {
             FillVisibilityMatrix();
             stepsHidden += allHidden ? 1 : 0;
@@ -212,20 +268,29 @@ public class GameController : MonoBehaviour
                             {
                                 hiders[j].gameObject.SetActive(false);
                             }
-                            else
-                            {
-                                EndEpisode();
-                            }
                         }
                     }
                 }
             }
+        }
+
+        // Visibility rewards must use the positions and line of sight from this step.
+        UpdateRewards();
+
+        if (episodeTimer >= ActiveEpisodeSteps || (allowCapture && hidersCaptured == hiders.Count))
+        {
+            EndEpisode();
         }
     }
 
 
     public IEnumerable<AgentActions> GetHiders()
     {
+        if (hiders == null)
+        {
+            yield break;
+        }
+
         foreach (AgentActions agent in hiders)
         {
             yield return agent;
@@ -234,6 +299,11 @@ public class GameController : MonoBehaviour
 
     public IEnumerable<AgentActions> GetSeekers()
     {
+        if (seekers == null)
+        {
+            yield break;
+        }
+
         foreach (AgentActions agent in seekers)
         {
             yield return agent;
@@ -243,7 +313,13 @@ public class GameController : MonoBehaviour
 
     private void EndEpisode()
     {
-        float timeHidden = GracePeriodEnded ? stepsHidden / Mathf.Ceil(episodeTimer - episodeSteps * gracePeriodFraction) : 0.0f;
+        if (roundOver)
+        {
+            return;
+        }
+
+        roundOver = true;
+        float timeHidden = GracePeriodEnded ? stepsHidden / Mathf.Ceil(episodeTimer - ActiveEpisodeSteps * ActiveGraceFraction) : 0.0f;
         statsRecorder.Add("Environment/TimeHidden", timeHidden);
 
         if (allowCapture)
@@ -251,21 +327,30 @@ public class GameController : MonoBehaviour
             statsRecorder.Add("Environment/HidersCaptured", (float)hidersCaptured / hiders.Count());
         }
 
+        bool hidersWon = false;
+        if (winCondition == WinCondition.LineOfSight && hidersPerfectGame)
+        {
+            hidersWon = true;
+        }
+        if (winCondition == WinCondition.Capture && hidersCaptured < seekersCaptureGoal)
+        {
+            hidersWon = true;
+        }
+
+        if (inferenceMode)
+        {
+            GenerationComparer.Instance?.RecordRound(hidersWon, timeHidden, hidersCaptured, hiders.Count);
+        }
+
         if (winCondition != WinCondition.None)
         {
-            bool hidersWon = false;
-            if (winCondition == WinCondition.LineOfSight && hidersPerfectGame)
-            {
-                hidersWon = true;
-            }
-            if (winCondition == WinCondition.Capture && hidersCaptured < seekersCaptureGoal)
-            {
-                hidersWon = true;
-            }
 
             hidersGroup.AddGroupReward(hidersWon ? winConditionRewardMultiplier : -winConditionRewardMultiplier);
             seekersGroup.AddGroupReward(hidersWon ? -winConditionRewardMultiplier : winConditionRewardMultiplier);
             statsRecorder.Add("Environment/HiderWinRatio", hidersWon ? 1 : 0);
+            LastRoundSummary = allowCapture
+                ? string.Format("{0} won. Captured {1}/{2}.", hidersWon ? "Hiders" : "Seekers", hidersCaptured, hiders.Count)
+                : string.Format("{0} won. Hiders stayed hidden {1:0}% of the round.", hidersWon ? "Hiders" : "Seekers", timeHidden * 100f);
 
             if (debugLogMatchResult)
             {
@@ -282,8 +367,28 @@ public class GameController : MonoBehaviour
             }
         }
 
+        if (inferenceMode)
+        {
+            Time.timeScale = 0f;
+            StartCoroutine(ShowResultThenReset());
+            return;
+        }
+
+        CloseEpisode();
+    }
+
+    private IEnumerator ShowResultThenReset()
+    {
+        yield return new WaitForSecondsRealtime(3f);
+        Time.timeScale = 1f;
+        CloseEpisode();
+    }
+
+    private void CloseEpisode()
+    {
         hidersGroup.EndGroupEpisode();
         seekersGroup.EndGroupEpisode();
+        roundOver = false;
         ResetScene();
     }
 
@@ -293,6 +398,12 @@ public class GameController : MonoBehaviour
         hidersPerfectGame = true;
         hidersCaptured = 0;
         episodeTimer = 0;
+
+        bool keepPlayerLayout = architectManager != null && architectManager.architectEnabled;
+        if (keepPlayerLayout)
+        {
+            mapGenerator.SetPersistentLayout(true);
+        }
 
         if (!mapGenerator.InstantiatesBoxesOnReset())
         {
@@ -323,6 +434,18 @@ public class GameController : MonoBehaviour
         for (int i = 0; i < seekerInstances.Count; i++)
         {
             seekerInstances[i].gameObject.SetActive(i < seekers.Count);
+        }
+
+        if (mapGenerator.UsesPersistentLayout)
+        {
+            foreach (ArchitectObject piece in FindObjectsOfType<ArchitectObject>())
+            {
+                BoxHolding box = piece != null ? piece.GetComponent<BoxHolding>() : null;
+                if (box != null)
+                {
+                    box.RestorePlacedPose();
+                }
+            }
         }
 
         visibilityMatrix = new bool[hiders.Count, seekers.Count];

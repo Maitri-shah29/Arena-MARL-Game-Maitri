@@ -28,6 +28,8 @@ public class ArchitectUI : MonoBehaviour
     private Image[]  toolHighlights;
     private Text[]   toolButtonTexts;
     private Button   startRoundButton;
+    private Image    hiderSideImage;
+    private Image    seekerSideImage;
 
     private static readonly ArchitectManager.Tool[] toolEnum = new ArchitectManager.Tool[]
     {
@@ -57,9 +59,9 @@ public class ArchitectUI : MonoBehaviour
         CanvasScaler scaler = GetComponent<CanvasScaler>();
         if (scaler == null)
             scaler = gameObject.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+        float fit = Mathf.Min(Screen.width / 1100f, Screen.height / 700f);
+        scaler.scaleFactor = Mathf.Clamp(fit, 0.7f, 1f);
 
         if (GetComponent<GraphicRaycaster>() == null)
             gameObject.AddComponent<GraphicRaycaster>();
@@ -106,6 +108,8 @@ public class ArchitectUI : MonoBehaviour
                 UpdateTopBar(lastEnergy);
                 RefreshToolHighlights();
             }
+
+            RefreshSideHighlight();
         }
     }
 
@@ -181,7 +185,7 @@ public class ArchitectUI : MonoBehaviour
             ? GetToolDisplayName(architectManager.CurrentTool)
             : "Wall";
 
-        energyLabel.text = $"ENERGY: {currentEnergy} / {maxEnergy}   |   Tool: {toolName}";
+        energyLabel.text = $"{currentEnergy}/{maxEnergy}  {toolName}";
     }
 
     private void UpdateButtonLabels()
@@ -200,32 +204,23 @@ public class ArchitectUI : MonoBehaviour
 
     private void BuildUI()
     {
-        // ── Top panel (energy + tool + feedback) ─────────────────────────────
-        // Top anchor (0.5, 1), pivot (0.5, 1), negative y offset (-25f) to prevent top clipping
-        GameObject topPanel = CreatePanel("TopPanel",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0.5f, 1f),
-            new Vector2(0f, -25f), new Vector2(720f, 75f));
+        GameObject toolbar = CreatePanel("Toolbar",
+            new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(0f, 1f),
+            new Vector2(8f, -8f), new Vector2(210f, 360f));
 
-        energyLabel = CreateTextChild(topPanel.transform, "EnergyLabel",
-            $"ENERGY: {GetMaxEnergy()} / {GetMaxEnergy()}   |   Tool: Wall",
-            17, Color.white, TextAnchor.MiddleCenter,
-            new Vector2(0f, 0.45f), new Vector2(1f, 1f),
-            new Vector2(10f, 0f), new Vector2(-10f, -4f));
+        energyLabel = CreateTextChild(toolbar.transform, "EnergyLabel",
+            $"Energy {GetMaxEnergy()}/{GetMaxEnergy()}",
+            16, Color.white, TextAnchor.MiddleCenter,
+            new Vector2(0f, 0.88f), new Vector2(1f, 1f),
+            new Vector2(6f, 0f), new Vector2(-6f, -2f));
         energyLabel.fontStyle = FontStyle.Bold;
 
-        feedbackLabel = CreateTextChild(topPanel.transform, "FeedbackLabel",
-            "Place objects or press Space to start round.",
-            14, new Color(0.85f, 0.9f, 1f, 1f), TextAnchor.MiddleCenter,
-            new Vector2(0f, 0f), new Vector2(1f, 0.45f),
-            new Vector2(10f, 4f), new Vector2(-10f, 0f));
-
-        // ── Tool toolbar (left side: 5 buttons) ──────────────────────────────
-        // Left anchor (0, 0.5), pivot (0, 0.5), positive x offset (+10f) so nothing extends past left edge
-        GameObject toolbar = CreatePanel("Toolbar",
-            new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-            new Vector2(0f, 0.5f),
-            new Vector2(10f, 0f), new Vector2(230f, 310f));
+        feedbackLabel = CreateTextChild(toolbar.transform, "FeedbackLabel",
+            "Click the floor to place",
+            13, new Color(1f, 0.95f, 0.7f, 1f), TextAnchor.MiddleCenter,
+            new Vector2(0f, 0.74f), new Vector2(1f, 0.88f),
+            new Vector2(6f, 0f), new Vector2(-6f, 0f));
 
         toolButtons     = new Button[5];
         toolHighlights  = new Image[5];
@@ -237,17 +232,16 @@ public class ArchitectUI : MonoBehaviour
             $"2  Box ({GetCostBox()})",
             $"3  Demolish ({GetCostDemolish()})",
             $"4  Pre-Lock ({GetCostPreLock()})",
-            "Start Round  [Space]"
+            "Start  [Space]"
         };
 
         for (int i = 0; i < 5; i++)
         {
             int idx = i;
-            float yOffset = 110f - i * 55f;
+            float yOffset = 28f - i * 46f;
 
-            // Button size widened to 210x48, centered horizontally in 230px toolbar
             GameObject btnGo = CreateButton(toolbar.transform, $"Btn_{i}", initialLabels[i],
-                new Vector2(0f, yOffset), new Vector2(210f, 48f), out Text btnText);
+                new Vector2(0f, yOffset), new Vector2(190f, 40f), out Text btnText);
 
             toolButtons[i]     = btnGo.GetComponent<Button>();
             toolHighlights[i]  = btnGo.GetComponent<Image>();
@@ -283,10 +277,33 @@ public class ArchitectUI : MonoBehaviour
         GameObject hintPanel = CreatePanel("BottomHintPanel",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
             new Vector2(0.5f, 0f),
-            new Vector2(0f, 20f), new Vector2(720f, 36f));
+            new Vector2(0f, 8f), new Vector2(560f, 32f));
+
+        GameObject sidePanel = CreatePanel("SidePanel",
+            new Vector2(1f, 1f), new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(-8f, -8f), new Vector2(170f, 168f));
+
+        CreateTextChild(sidePanel.transform, "SideLabel",
+            "Play as",
+            16, Color.white, TextAnchor.MiddleCenter,
+            new Vector2(0f, 0.72f), new Vector2(1f, 1f),
+            new Vector2(6f, 0f), new Vector2(-6f, -4f)).fontStyle = FontStyle.Bold;
+
+        GameObject hiderButton = CreateButton(sidePanel.transform, "PlayHider", "Hider",
+            new Vector2(0f, 10f), new Vector2(150f, 36f), out Text hiderLabel);
+        hiderLabel.text = "Hider";
+        hiderSideImage = hiderButton.GetComponent<Image>();
+        hiderButton.GetComponent<Button>().onClick.AddListener(() => FindObjectOfType<HumanPlayer>()?.SetSide(true));
+
+        GameObject seekerButton = CreateButton(sidePanel.transform, "PlaySeeker", "Seeker",
+            new Vector2(0f, -34f), new Vector2(150f, 36f), out Text seekerLabel);
+        seekerLabel.text = "Seeker";
+        seekerSideImage = seekerButton.GetComponent<Image>();
+        seekerButton.GetComponent<Button>().onClick.AddListener(() => FindObjectOfType<HumanPlayer>()?.SetSide(false));
 
         CreateTextChild(hintPanel.transform, "HintLabel",
-            "Click floor to place | R rotate | Z undo | Space start",
+            "Click the floor    R rotate    Z undo    Space starts",
             14, Color.white, TextAnchor.MiddleCenter,
             Vector2.zero, Vector2.one,
             new Vector2(10f, 0f), new Vector2(-10f, 0f)).fontStyle = FontStyle.Bold;
@@ -308,6 +325,24 @@ public class ArchitectUI : MonoBehaviour
             toolHighlights[i].color = active
                 ? new Color(0.2f, 0.8f, 1f, 0.95f)     // Selected tool – bright cyan
                 : new Color(0.15f, 0.17f, 0.22f, 0.9f); // Normal – sleek dark panel
+        }
+    }
+
+    private void RefreshSideHighlight()
+    {
+        HumanPlayer player = FindObjectOfType<HumanPlayer>();
+        bool asHider = player == null || player.PlayingAsHider;
+        if (hiderSideImage != null)
+        {
+            hiderSideImage.color = asHider
+                ? new Color(0.15f, 0.55f, 0.95f, 0.95f)
+                : new Color(0.15f, 0.17f, 0.22f, 0.9f);
+        }
+        if (seekerSideImage != null)
+        {
+            seekerSideImage.color = asHider
+                ? new Color(0.15f, 0.17f, 0.22f, 0.9f)
+                : new Color(0.85f, 0.25f, 0.25f, 0.95f);
         }
     }
 
@@ -373,10 +408,11 @@ public class ArchitectUI : MonoBehaviour
         t.alignment            = anchor;
         t.horizontalOverflow   = HorizontalWrapMode.Wrap;
         t.verticalOverflow     = VerticalWrapMode.Overflow;
-        t.resizeTextForBestFit = true;
-        t.resizeTextMinSize    = 10;
-        t.resizeTextMaxSize    = fontSize;
+        t.resizeTextForBestFit = false;
         t.raycastTarget        = false;
+        Outline outline = go.AddComponent<Outline>();
+        outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
 
         RectTransform rt = go.GetComponent<RectTransform>();
         rt.anchorMin = anchorMin;
@@ -416,16 +452,17 @@ public class ArchitectUI : MonoBehaviour
         labelText = labelGo.AddComponent<Text>();
         labelText.text                 = label;
         labelText.font                 = GetSafeFont();
-        labelText.fontSize             = 14;
+        labelText.fontSize             = 16;
         labelText.fontStyle            = FontStyle.Bold;
         labelText.color                = Color.white;
-        labelText.alignment            = TextAnchor.MiddleLeft;
-        labelText.horizontalOverflow   = HorizontalWrapMode.Wrap;
+        labelText.alignment            = TextAnchor.MiddleCenter;
+        labelText.horizontalOverflow   = HorizontalWrapMode.Overflow;
         labelText.verticalOverflow     = VerticalWrapMode.Overflow;
-        labelText.resizeTextForBestFit = true;
-        labelText.resizeTextMinSize    = 10;
-        labelText.resizeTextMaxSize    = 14;
+        labelText.resizeTextForBestFit = false;
         labelText.raycastTarget        = false;
+        Outline labelOutline = labelGo.AddComponent<Outline>();
+        labelOutline.effectColor = new Color(0f, 0f, 0f, 0.95f);
+        labelOutline.effectDistance = new Vector2(1.5f, -1.5f);
 
         RectTransform lrt = labelGo.GetComponent<RectTransform>();
         lrt.anchorMin = Vector2.zero;

@@ -167,9 +167,6 @@ public class ArchitectManager : MonoBehaviour
     {
         if (!architectEnabled) return;
 
-        // Clean up anything the architect placed in the previous round
-        CleanupArchitectObjects();
-
         isArchitectPhase = true;
         energyRemaining  = energyBudgetPerRound;
         placedThisRound  = 0;
@@ -177,7 +174,9 @@ public class ArchitectManager : MonoBehaviour
         actionsThisRound.Clear();
         undoStack.Clear();
         wallRotationStep = 0;
-        FeedbackMessage  = "Place objects or press Space to start round.";
+        FeedbackMessage = architectSpawnedObjects.Count > 0
+            ? "Arena kept. Click the floor, or Space to replay."
+            : "Click the open floor. Pieces stay. Space starts.";
 
         // Floor plane at platform floor level (y = platform.y, nominally 0)
         floorPlane = new Plane(Vector3.up, transform.position);
@@ -212,6 +211,7 @@ public class ArchitectManager : MonoBehaviour
         // Re-enable tactical camera
         if (tacticalCamCtrl != null) tacticalCamCtrl.enabled = true;
 
+        PlayerLayout.Save(transform);
         OnRoundStarted?.Invoke();
     }
 
