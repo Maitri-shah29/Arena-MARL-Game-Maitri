@@ -53,6 +53,10 @@ public class GameController : MonoBehaviour
     [SerializeField] private bool debugLogMatchResult = false;
     [SerializeField] private bool debugLogCoplay = false;
 
+    [Header("Architect")]
+    [Tooltip("Assign the ArchitectManager on this platform. If null or architectEnabled=false, behavior is unchanged.")]
+    [SerializeField] private ArchitectManager architectManager = null;
+
 
     private int episodeTimer = 0;
     private List<AgentActions> hiders;
@@ -143,6 +147,13 @@ public class GameController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // While the Architect phase is active (timeScale == 0 and architect is
+        // editing the arena) we must not advance the episode timer or compute
+        // rewards. BeginArchitectPhase sets timeScale=0 so FixedUpdate normally
+        // won't fire, but we guard here as a belt-and-suspenders safety measure.
+        if (architectManager != null && architectManager.architectEnabled && architectManager.IsArchitectPhase)
+            return;
+
         episodeTimer++;
 
         Vector3 seekersMeanPosition = Vector3.zero;
@@ -368,6 +379,12 @@ public class GameController : MonoBehaviour
                 }
             }
         }
+        // Notify ArchitectManager that a new round is ready for editing.
+        // This must be the LAST call in ResetScene so the arena is fully generated
+        // and agents are placed before the architect phase begins.
+        // When architectEnabled == false, BeginArchitectPhase returns immediately.
+        if (architectManager != null)
+            architectManager.BeginArchitectPhase();
     }
 
 

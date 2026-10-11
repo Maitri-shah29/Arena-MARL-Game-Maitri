@@ -20,6 +20,16 @@ public class BoxHolding : MonoBehaviour
     private Vector3 startPosition;
     private Quaternion startRotation;
 
+    // ── Architect pre-lock state ──────────────────────────────────────────────
+    // True while this box is locked by the Architect (not by an in-game agent).
+    // Cleared by Reset() so the lock dissolves at the start of each new episode.
+    private bool _isArchitectLocked = false;
+
+    // Hidden sentinel AgentActions used as a non-null lockOwner placeholder.
+    // TryGrab and TryLockUnlock only check lockOwner != null, so any non-null
+    // value blocks agent interaction for the whole round.
+    private AgentActions _architectSentinel = null;
+
 
     public AgentActions Owner { get { return owner; } }
     public AgentActions LockOwner { get { return lockOwner; } }
@@ -76,10 +86,60 @@ public class BoxHolding : MonoBehaviour
     }
 
 
+    // ── Architect pre-lock API ────────────────────────────────────────────────
+    // Locks the box for one team without requiring a live AgentActions reference.
+    // The lock persists for the whole round:
+    //   - TryGrab returns false (lockOwner != null -> grab blocked for all agents).
+    //   - Agents cannot unlock it because the sentinel's IsHiding value
+    //     does not match any real agent team check for TryLockUnlock.
+    // BoxHolding.Reset() clears lockOwner and the sentinel automatically, so
+    // the lock is dissolved at the start of each new episode.
+    // Returns false if already locked (by agent or architect).
+    public bool ArchitectPreLock(bool forHiders)
+    {
+        if (lockOwner != null) return false;   // already locked
+        if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+
+        if (_architectSentinel == null)
+        {
+            GameObject s = new GameObject("__ArchitectLockSentinel__");
+            s.hideFlags = HideFlags.HideInHierarchy;
+            _architectSentinel = s.AddComponent<AgentActions>();
+        }
+
+        rigidbody.isKinematic = true;
+        owner?.ReleaseBox();
+        owner = null;
+        lockOwner = _architectSentinel;
+        meshRenderer.material = forHiders ? materialLockHider : materialLockSeeker;
+        tag = forHiders ? tagLockHider : tagLockSeeker;
+        _isArchitectLocked = true;
+        return true;
+    }
+
+    // Reverts an architect pre-lock (called by Undo). Safe to call if not locked.
+    public void ArchitectUnlock()
+    {
+        if (!_isArchitectLocked) return;
+        if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+        rigidbody.isKinematic = false;
+        lockOwner = null;
+        meshRenderer.material = materialDefault;
+        tag = tagDefault;
+        _isArchitectLocked = false;
+    }
+
+
     public void Reset()
     {
         owner = null;
         lockOwner = null;
+        _isArchitectLocked = false;
+        if (_architectSentinel != null)
+        {
+            Destroy(_architectSentinel.gameObject);
+            _architectSentinel = null;
+        }
         tag = tagDefault;
         rigidbody.isKinematic = false;
         meshRenderer.material = materialDefault;

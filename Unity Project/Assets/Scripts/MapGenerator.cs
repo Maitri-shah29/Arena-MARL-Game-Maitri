@@ -57,6 +57,13 @@ public class MapGenerator : MonoBehaviour
     public List<AgentActions> GetInstantiatedHiders() => hiders.ToList();
     public List<AgentActions> GetInstantiatedSeekers() => seekers.ToList();
 
+    // Read-only accessors for ArchitectManager and ArchitectCamera
+    public float AgentRadius  => agentRadius;
+    public float ObjectRadius => objectRadius;
+    public float MapSize      => mapSize;
+    public float WallY        => wallY;
+    public float BoxY         => boxY;
+
 
     private void Awake()
     {
