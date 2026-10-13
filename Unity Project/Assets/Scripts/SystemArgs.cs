@@ -6,11 +6,13 @@ public static class SystemArgs
     private static string modelsPath = null;
     private static string gameParamsPath = null;
     private static string arenaParamsPath = null;
+    private static string layoutPath = null;
 
     public static string TrainerStatusPath { get { Initialize(); return trainerStatusPath; } }
     public static string ModelsPath { get { Initialize(); return modelsPath; } }
     public static string GameParamsPath { get { Initialize(); return gameParamsPath; } }
     public static string ArenaParamsPath { get { Initialize(); return arenaParamsPath; } }
+    public static string LayoutPath { get { Initialize(); return layoutPath; } }
 
     private static void Initialize()
     {
@@ -37,6 +39,10 @@ public static class SystemArgs
             if (arg.StartsWith("arena_params="))
             {
                 arenaParamsPath = arg[13..];
+            }
+            if (arg.StartsWith("layout="))
+            {
+                layoutPath = arg[7..];
             }
         }
     }
