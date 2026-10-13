@@ -77,12 +77,12 @@ MonoBehaviour:
     m_Value: {x: 0.5, y: 0.5}
   intensity:
     m_OverrideState: 1
-    m_Value: 0.38
+    m_Value: 0.18
     min: 0
     max: 1
   smoothness:
     m_OverrideState: 1
-    m_Value: 0.55
+    m_Value: 0.35
     min: 0.01
     max: 1
   rounded:
@@ -123,10 +123,10 @@ MonoBehaviour:
   m_AdvancedMode: 0
   postExposure:
     m_OverrideState: 1
-    m_Value: 0.15
+    m_Value: 0.45
   contrast:
     m_OverrideState: 1
-    m_Value: 15
+    m_Value: 6
     min: -100
     max: 100
   colorFilter:
