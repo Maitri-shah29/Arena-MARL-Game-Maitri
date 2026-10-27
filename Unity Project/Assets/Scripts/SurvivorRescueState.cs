@@ -16,6 +16,9 @@ public class SurvivorRescueState : MonoBehaviour
     private Transform triageZoneTransform;
     private TextMesh statusBadge;
 
+    public Transform AssignedRescuer => assignedRescuer;
+    public TextMesh StatusBadge => statusBadge;
+
     private void Awake()
     {
         agentActions = GetComponent<AgentActions>();

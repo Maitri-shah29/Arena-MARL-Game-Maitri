@@ -82,11 +82,16 @@ public class SeekerLaserScanner : MonoBehaviour
         // Close the loop back to origin
         laserRenderer.SetPosition(RayCount + 1, origin);
 
-        // Subtle pulsing laser effect
-        float pulse = 0.8f + 0.2f * Mathf.Sin(Time.time * 6f);
+        // Subtle pulsing laser effect using unscaled time
+        float pulse = 0.8f + 0.2f * Mathf.Sin(Time.unscaledTime * 6f);
         Color col = normalColor * pulse;
         col.a = normalColor.a;
         laserRenderer.startColor = col;
         laserRenderer.endColor = col;
+    }
+
+    public void SetScannerColor(Color c)
+    {
+        normalColor = c;
     }
 }

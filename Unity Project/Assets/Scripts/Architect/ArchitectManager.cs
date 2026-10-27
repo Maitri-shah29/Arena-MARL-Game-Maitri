@@ -80,9 +80,33 @@ public class ArchitectManager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
 
     public int  EnergyRemaining    => energyRemaining;
+    public int  EnergyBudget       => energyBudgetPerRound;
+    public int  CostSpawnWall      => costSpawnWall;
+    public int  CostSpawnBox       => costSpawnBox;
     public int  CostSpawnPillar    => costSpawnPillar;
     public int  CostSpawnRamp      => costSpawnRamp;
     public int  CostSpawnRubble    => costSpawnRubble;
+    public int  CostDemolish       => costDemolish;
+    public int  CostPreLock        => costPreLock;
+    public int  CostPreLockHider   => costPreLock;
+    public int  CostPreLockSeeker  => costPreLock;
+
+    public int GetToolCost(Tool tool)
+    {
+        switch (tool)
+        {
+            case Tool.SpawnWall: return costSpawnWall;
+            case Tool.SpawnBox: return costSpawnBox;
+            case Tool.SpawnPillar: return costSpawnPillar;
+            case Tool.SpawnRamp: return costSpawnRamp;
+            case Tool.SpawnRubble: return costSpawnRubble;
+            case Tool.Demolish: return costDemolish;
+            case Tool.PreLockHider: return costPreLock;
+            case Tool.PreLockSeeker: return costPreLock;
+            default: return 0;
+        }
+    }
+
     public int  NetObstacleChange  => placedThisRound - demolishedThisRound;
     public IReadOnlyList<ArchitectActionRecord> ActionsThisRound => actionsThisRound;
 

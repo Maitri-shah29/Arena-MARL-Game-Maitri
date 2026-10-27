@@ -93,12 +93,28 @@ public class GameController : MonoBehaviour
 
     public bool RoundSettled => roundOver;
 
+    public int EpisodeTimer => episodeTimer;
+    public int TotalEpisodeSteps => ActiveEpisodeSteps;
+    public float GraceFraction => ActiveGraceFraction;
+    public float ConeAngle => coneAngle;
+    public int SeekerCount => seekers == null ? 0 : seekers.Count;
+    public AgentActions GetSeeker(int index) => (seekers != null && index >= 0 && index < seekers.Count) ? seekers[index] : null;
+    public AgentActions GetHider(int index) => (hiders != null && index >= 0 && index < hiders.Count) ? hiders[index] : null;
+    public bool GetSeekerSeesHider(int seekerIdx, int hiderIdx)
+    {
+        if (visibilityMatrix == null || hiders == null || seekers == null) return false;
+        if (hiderIdx < 0 || hiderIdx >= hiders.Count || seekerIdx < 0 || seekerIdx >= seekers.Count) return false;
+        return visibilityMatrix[hiderIdx, seekerIdx];
+    }
+
     public bool DebugDrawBoxHold => debugDrawBoxHold;
     public bool DebugDrawIndividualReward => debugDrawIndividualReward;
     public bool CaptureEnabled => allowCapture;
     public int CapturedHiders => hidersCaptured;
     public int HiderCount => hiders == null ? 0 : hiders.Count;
     public string LastRoundSummary { get; private set; } = "";
+
+    public event System.Action OnEpisodeReset;
 
     public float HiddenPercent
     {
@@ -169,6 +185,11 @@ public class GameController : MonoBehaviour
         if (mainCam != null && mainCam.GetComponent<TacticalCameraController>() == null)
         {
             mainCam.gameObject.AddComponent<TacticalCameraController>();
+        }
+
+        if (GetComponent<DisasterThemeManager>() == null)
+        {
+            gameObject.AddComponent<DisasterThemeManager>();
         }
 
         ResetScene();
@@ -537,6 +558,8 @@ public class GameController : MonoBehaviour
         // When architectEnabled == false, BeginArchitectPhase returns immediately.
         if (architectManager != null)
             architectManager.BeginArchitectPhase();
+
+        OnEpisodeReset?.Invoke();
     }
 
 
@@ -578,7 +601,7 @@ public class GameController : MonoBehaviour
                     allHidden = false;
                     if (debugDrawVisibility)
                     {
-                        Debug.DrawLine(seekers[j].transform.position, hit.point, Color.red);
+                        Debug.DrawLine(seekers[j].transform.position, hit.point, new Color(1f, 0.55f, 0f));
                     }
                 }
                 else

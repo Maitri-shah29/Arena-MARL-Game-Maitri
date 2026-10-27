@@ -55,18 +55,30 @@ public class AgentTacticalRing : MonoBehaviour
         }
     }
 
+    public void SetBaseColor(Color newColor)
+    {
+        baseColor = newColor;
+    }
+
+    public void SetPulseSpeed(float speed)
+    {
+        pulseSpeed = speed;
+    }
+
     private void Update()
     {
         if (ringRenderer == null) return;
 
-        if (agentActions.WasCaptured)
+        SurvivorRescueState sState = GetComponent<SurvivorRescueState>();
+        if (agentActions.WasCaptured && (sState == null || sState.CurrentState != SurvivorRescueState.State.Rescued))
         {
             ringRenderer.enabled = false;
             return;
         }
+        ringRenderer.enabled = true;
 
-        // Pulse emission
-        float pulse = 0.7f + 0.3f * Mathf.Sin(Time.time * pulseSpeed);
+        // Pulse emission using unscaled time
+        float pulse = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * pulseSpeed);
         Color currentColor = baseColor * pulse;
         currentColor.a = baseColor.a;
         ringRenderer.startColor = currentColor;
