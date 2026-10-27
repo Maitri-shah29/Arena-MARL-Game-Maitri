@@ -35,6 +35,11 @@ public class ArchitectManager : MonoBehaviour
     [SerializeField] private int costDemolish   = 35;
     [SerializeField] private int costPreLock    = 20;
 
+    [Header("Disaster Debris Costs")]
+    [SerializeField] private int costSpawnPillar = 30;
+    [SerializeField] private int costSpawnRamp   = 25;
+    [SerializeField] private int costSpawnRubble = 20;
+
     [Header("Grid")]
     [SerializeField] private float gridCellSize = 1f;
 
@@ -51,6 +56,11 @@ public class ArchitectManager : MonoBehaviour
     [SerializeField] private BoxHolding boxPrefab = null;
     [Tooltip("MapGenerator on this platform.")]
     [SerializeField] private MapGenerator mapGenerator = null;
+
+    [Header("Disaster Debris References")]
+    [SerializeField] private BoxHolding pillarPrefab = null;
+    [SerializeField] private BoxHolding rampPrefab   = null;
+    [SerializeField] private BoxHolding rubblePrefab = null;
 
     [Header("Ghost preview materials (runtime-tinted; leave null to auto-create)")]
     [Tooltip("Source material for the ghost. Leave null to use Standard shader fallback.")]
@@ -70,6 +80,9 @@ public class ArchitectManager : MonoBehaviour
     // ─────────────────────────────────────────────────────────────────────────
 
     public int  EnergyRemaining    => energyRemaining;
+    public int  CostSpawnPillar    => costSpawnPillar;
+    public int  CostSpawnRamp      => costSpawnRamp;
+    public int  CostSpawnRubble    => costSpawnRubble;
     public int  NetObstacleChange  => placedThisRound - demolishedThisRound;
     public IReadOnlyList<ArchitectActionRecord> ActionsThisRound => actionsThisRound;
 
@@ -77,7 +90,7 @@ public class ArchitectManager : MonoBehaviour
     //  Tool enumeration (drives UI highlight and keyboard shortcuts 1-4)
     // ─────────────────────────────────────────────────────────────────────────
 
-    public enum Tool { SpawnWall, SpawnBox, Demolish, PreLockHider, PreLockSeeker }
+    public enum Tool { SpawnWall, SpawnBox, SpawnPillar, SpawnRamp, SpawnRubble, Demolish, PreLockHider, PreLockSeeker }
     public Tool CurrentTool { get; private set; } = Tool.SpawnWall;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -139,6 +152,7 @@ public class ArchitectManager : MonoBehaviour
     {
         gameController = GetComponent<GameController>();
         BuildGhostMaterials();
+        LoadDebrisPrefabsIfNull();
     }
 
     private void Update()
@@ -243,12 +257,17 @@ public class ArchitectManager : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Alpha1)) SetTool(Tool.SpawnWall);
         if (Input.GetKeyDown(KeyCode.Alpha2)) SetTool(Tool.SpawnBox);
-        if (Input.GetKeyDown(KeyCode.Alpha3)) SetTool(Tool.Demolish);
-        if (Input.GetKeyDown(KeyCode.Alpha4)) SetTool(Tool.PreLockHider);
-        if (Input.GetKeyDown(KeyCode.Alpha5)) SetTool(Tool.PreLockSeeker);
+        if (Input.GetKeyDown(KeyCode.Alpha3)) SetTool(Tool.SpawnPillar);
+        if (Input.GetKeyDown(KeyCode.Alpha4)) SetTool(Tool.SpawnRamp);
+        if (Input.GetKeyDown(KeyCode.Alpha5)) SetTool(Tool.SpawnRubble);
+        if (Input.GetKeyDown(KeyCode.Alpha6)) SetTool(Tool.Demolish);
+        if (Input.GetKeyDown(KeyCode.Alpha7)) SetTool(Tool.PreLockHider);
 
-        // R → rotate wall by 90° (only meaningful for SpawnWall)
+        // R → rotate debris by 90°
         if (Input.GetKeyDown(KeyCode.R)) wallRotationStep = (wallRotationStep + 1) % 4;
+
+        // L → Load Disaster Ruins Preset
+        if (Input.GetKeyDown(KeyCode.L)) LoadDisasterPreset();
 
         // Space / Enter → start round
         if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
@@ -330,7 +349,9 @@ public class ArchitectManager : MonoBehaviour
         if (ghostObj == null) return;
 
         // Skip ghost for tools that don't show a preview
-        bool showGhostForTool = CurrentTool == Tool.SpawnWall || CurrentTool == Tool.SpawnBox;
+        bool showGhostForTool = CurrentTool == Tool.SpawnWall || CurrentTool == Tool.SpawnBox ||
+                                CurrentTool == Tool.SpawnPillar || CurrentTool == Tool.SpawnRamp ||
+                                CurrentTool == Tool.SpawnRubble;
         if (!showGhostForTool)
         {
             ghostObj.SetActive(false);
@@ -349,31 +370,52 @@ public class ArchitectManager : MonoBehaviour
         // Snap to grid
         worldPos = SnapToGrid(worldPos);
 
-        // Choose mesh and half-extents based on tool
-        Mesh mesh;
+        Mesh mesh = GetPrimitiveMesh(PrimitiveType.Cube);
         Vector3 halfExt;
         Quaternion rot;
         float yPos;
+        Vector3 localScale;
 
         if (CurrentTool == Tool.SpawnWall)
         {
-            mesh    = GetPrimitiveMesh(PrimitiveType.Cube);
-            halfExt = new Vector3(wallScale.x * 0.5f, wallScale.y * 0.5f, wallScale.z * 0.5f);
-            rot     = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
-            yPos    = transform.position.y + mapGenerator.WallY;
+            halfExt    = new Vector3(wallScale.x * 0.5f, wallScale.y * 0.5f, wallScale.z * 0.5f);
+            rot        = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
+            yPos       = transform.position.y + mapGenerator.WallY;
+            localScale = wallScale;
+        }
+        else if (CurrentTool == Tool.SpawnPillar)
+        {
+            halfExt    = new Vector3(0.4f, 0.4f, 2.25f);
+            rot        = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
+            yPos       = transform.position.y + 0.4f;
+            localScale = new Vector3(0.8f, 0.8f, 4.5f);
+        }
+        else if (CurrentTool == Tool.SpawnRamp)
+        {
+            halfExt    = new Vector3(1.1f, 0.6f, 1.9f);
+            rot        = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
+            yPos       = transform.position.y + 0.6f;
+            localScale = new Vector3(2.2f, 1.2f, 3.8f);
+        }
+        else if (CurrentTool == Tool.SpawnRubble)
+        {
+            halfExt    = new Vector3(0.8f, 0.45f, 0.8f);
+            rot        = Quaternion.identity;
+            yPos       = transform.position.y + 0.45f;
+            localScale = new Vector3(1.6f, 0.9f, 1.6f);
         }
         else // SpawnBox
         {
-            mesh    = GetPrimitiveMesh(PrimitiveType.Cube);
-            halfExt = new Vector3(1f, 1f, 1f); // box scale is 2x2x2 in prefab → 1 unit half-extent
-            rot     = Quaternion.identity;
-            yPos    = transform.position.y + mapGenerator.BoxY;
+            halfExt    = new Vector3(1f, 1f, 1f);
+            rot        = Quaternion.identity;
+            yPos       = transform.position.y + mapGenerator.BoxY;
+            localScale = new Vector3(2f, 2f, 2f);
         }
 
         Vector3 pos = new Vector3(worldPos.x, yPos, worldPos.z);
         ghostObj.transform.position   = pos;
         ghostObj.transform.rotation   = rot;
-        ghostObj.transform.localScale = CurrentTool == Tool.SpawnWall ? wallScale : new Vector3(2f, 2f, 2f);
+        ghostObj.transform.localScale = localScale;
 
         MeshFilter mf = ghostObj.GetComponent<MeshFilter>();
         if (mf.sharedMesh != mesh) mf.sharedMesh = mesh;
@@ -400,6 +442,9 @@ public class ArchitectManager : MonoBehaviour
         {
             case Tool.SpawnWall:      TrySpawnWall();            break;
             case Tool.SpawnBox:       TrySpawnBox();             break;
+            case Tool.SpawnPillar:    TrySpawnPillar();          break;
+            case Tool.SpawnRamp:      TrySpawnRamp();            break;
+            case Tool.SpawnRubble:    TrySpawnRubble();          break;
             case Tool.Demolish:       TryDemolish();             break;
             case Tool.PreLockHider:   TryPreLock(forHiders: true);  break;
             case Tool.PreLockSeeker:  TryPreLock(forHiders: false); break;
@@ -721,6 +766,186 @@ public class ArchitectManager : MonoBehaviour
         Destroy(temp);
         return mesh;
     }
+
+    private void LoadDebrisPrefabsIfNull()
+    {
+        if (pillarPrefab == null) pillarPrefab = Resources.Load<BoxHolding>("Debris/Pillar_Debris");
+        if (rampPrefab == null) rampPrefab = Resources.Load<BoxHolding>("Debris/Tilted_Slab_Debris");
+        if (rubblePrefab == null) rubblePrefab = Resources.Load<BoxHolding>("Debris/Rubble_Mound_Debris");
+    }
+
+    private void TrySpawnPillar()
+    {
+        if (!ChargeBudget(costSpawnPillar, "Pillar")) return;
+
+        Vector3 worldPos;
+        if (!ScreenRayToFloor(out worldPos)) { RefundBudget(costSpawnPillar); return; }
+        worldPos = SnapToGrid(worldPos);
+
+        Quaternion rot = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
+        float yPos = transform.position.y + 0.4f;
+        Vector3 pos = new Vector3(worldPos.x, yPos, worldPos.z);
+        Vector3 halfExt = new Vector3(0.4f, 0.4f, 2.25f);
+
+        if (!IsPlacementValid(pos, halfExt, rot))
+        {
+            RefundBudget(costSpawnPillar);
+            FeedbackMessage = "Cannot place pillar here.";
+            return;
+        }
+
+        BoxHolding prefabToUse = pillarPrefab != null ? pillarPrefab : boxPrefab;
+        if (prefabToUse == null) prefabToUse = Resources.Load<BoxHolding>("Debris/Pillar_Debris");
+
+        BoxHolding pillar = Instantiate(prefabToUse, pos, rot);
+        pillar.name = "Pillar_Debris";
+        pillar.transform.localScale = new Vector3(0.8f, 0.8f, 4.5f);
+        pillar.gameObject.AddComponent<ArchitectObject>();
+        architectSpawnedObjects.Add(pillar.gameObject);
+
+        RecordAction(ArchitectActionRecord.ActionType.SpawnBox, pos, costSpawnPillar);
+        undoStack.Push(new UndoEntry { kind = UndoEntry.Kind.Spawn, spawnedObject = pillar.gameObject, cost = costSpawnPillar });
+        placedThisRound++;
+        FeedbackMessage = $"Fallen Pillar placed. Energy: {energyRemaining}";
+        OnLayoutChanged?.Invoke();
+    }
+
+    private void TrySpawnRamp()
+    {
+        if (!ChargeBudget(costSpawnRamp, "Tilted Slab")) return;
+
+        Vector3 worldPos;
+        if (!ScreenRayToFloor(out worldPos)) { RefundBudget(costSpawnRamp); return; }
+        worldPos = SnapToGrid(worldPos);
+
+        Quaternion rot = Quaternion.Euler(0f, wallRotationStep * 90f, 0f);
+        float yPos = transform.position.y + 0.6f;
+        Vector3 pos = new Vector3(worldPos.x, yPos, worldPos.z);
+        Vector3 halfExt = new Vector3(1.1f, 0.6f, 1.9f);
+
+        if (!IsPlacementValid(pos, halfExt, rot))
+        {
+            RefundBudget(costSpawnRamp);
+            FeedbackMessage = "Cannot place slab here.";
+            return;
+        }
+
+        BoxHolding prefabToUse = rampPrefab != null ? rampPrefab : boxPrefab;
+        if (prefabToUse == null) prefabToUse = Resources.Load<BoxHolding>("Debris/Tilted_Slab_Debris");
+
+        BoxHolding slab = Instantiate(prefabToUse, pos, rot);
+        slab.name = "Tilted_Slab_Debris";
+        slab.transform.localScale = new Vector3(2.2f, 1.2f, 3.8f);
+        slab.gameObject.AddComponent<ArchitectObject>();
+        architectSpawnedObjects.Add(slab.gameObject);
+
+        RecordAction(ArchitectActionRecord.ActionType.SpawnBox, pos, costSpawnRamp);
+        undoStack.Push(new UndoEntry { kind = UndoEntry.Kind.Spawn, spawnedObject = slab.gameObject, cost = costSpawnRamp });
+        placedThisRound++;
+        FeedbackMessage = $"Tilted Slab placed. Energy: {energyRemaining}";
+        OnLayoutChanged?.Invoke();
+    }
+
+    private void TrySpawnRubble()
+    {
+        if (!ChargeBudget(costSpawnRubble, "Rubble Mound")) return;
+
+        Vector3 worldPos;
+        if (!ScreenRayToFloor(out worldPos)) { RefundBudget(costSpawnRubble); return; }
+        worldPos = SnapToGrid(worldPos);
+
+        float yPos = transform.position.y + 0.45f;
+        Vector3 pos = new Vector3(worldPos.x, yPos, worldPos.z);
+        Vector3 halfExt = new Vector3(0.8f, 0.45f, 0.8f);
+
+        if (!IsPlacementValid(pos, halfExt, Quaternion.identity))
+        {
+            RefundBudget(costSpawnRubble);
+            FeedbackMessage = "Cannot place rubble here.";
+            return;
+        }
+
+        BoxHolding prefabToUse = rubblePrefab != null ? rubblePrefab : boxPrefab;
+        if (prefabToUse == null) prefabToUse = Resources.Load<BoxHolding>("Debris/Rubble_Mound_Debris");
+
+        BoxHolding rubble = Instantiate(prefabToUse, pos, Quaternion.identity);
+        rubble.name = "Rubble_Mound_Debris";
+        rubble.transform.localScale = new Vector3(1.6f, 0.9f, 1.6f);
+        rubble.gameObject.AddComponent<ArchitectObject>();
+        architectSpawnedObjects.Add(rubble.gameObject);
+
+        RecordAction(ArchitectActionRecord.ActionType.SpawnBox, pos, costSpawnRubble);
+        undoStack.Push(new UndoEntry { kind = UndoEntry.Kind.Spawn, spawnedObject = rubble.gameObject, cost = costSpawnRubble });
+        placedThisRound++;
+        FeedbackMessage = $"Rubble Mound placed. Energy: {energyRemaining}";
+        OnLayoutChanged?.Invoke();
+    }
+
+    public void LoadDisasterPreset()
+    {
+        string presetPath = System.IO.Path.Combine(Application.dataPath, "../config/collapsed_building_preset.json");
+        string json = "";
+        if (System.IO.File.Exists(presetPath))
+        {
+            json = System.IO.File.ReadAllText(presetPath);
+        }
+        else
+        {
+            TextAsset ta = Resources.Load<TextAsset>("Presets/collapsed_building_preset");
+            if (ta != null) json = ta.text;
+        }
+
+        if (string.IsNullOrEmpty(json))
+        {
+            FeedbackMessage = "Preset not found.";
+            return;
+        }
+
+        PlayerLayoutFile file = JsonUtility.FromJson<PlayerLayoutFile>(json);
+        if (file == null || file.pieces == null) return;
+
+        CleanupArchitectObjects();
+        LoadDebrisPrefabsIfNull();
+
+        foreach (var piece in file.pieces)
+        {
+            Vector3 worldPos = transform.TransformPoint(new Vector3(piece.px, piece.py, piece.pz));
+            Quaternion rot = transform.rotation * new Quaternion(piece.rx, piece.ry, piece.rz, piece.rw);
+            Vector3 scale = new Vector3(piece.sx, piece.sy, piece.sz);
+
+            if (piece.kind == "wall")
+            {
+                if (wallPrefab != null)
+                {
+                    GameObject w = Instantiate(wallPrefab, worldPos, rot);
+                    w.transform.localScale = scale;
+                    w.AddComponent<ArchitectObject>();
+                    architectSpawnedObjects.Add(w);
+                }
+            }
+            else
+            {
+                BoxHolding prefabToUse = boxPrefab;
+                if (piece.kind == "pillar" && pillarPrefab != null) prefabToUse = pillarPrefab;
+                else if (piece.kind == "ramp" && rampPrefab != null) prefabToUse = rampPrefab;
+                else if (piece.kind == "rubble" && rubblePrefab != null) prefabToUse = rubblePrefab;
+
+                if (prefabToUse != null)
+                {
+                    BoxHolding b = Instantiate(prefabToUse, worldPos, rot);
+                    b.name = piece.kind + "_Debris";
+                    b.transform.localScale = scale;
+                    b.gameObject.AddComponent<ArchitectObject>();
+                    architectSpawnedObjects.Add(b.gameObject);
+                }
+            }
+        }
+
+        placedThisRound = architectSpawnedObjects.Count;
+        FeedbackMessage = "Earthquake Ruins loaded! Space starts rescue.";
+        OnLayoutChanged?.Invoke();
+    }
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

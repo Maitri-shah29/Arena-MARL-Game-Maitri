@@ -77,6 +77,8 @@ public class GameController : MonoBehaviour
 
     private int stepsHidden = 0;
     private int hidersCaptured = 0;
+    private int survivorsEvacuated = 0;
+    public int EvacuatedCount => survivorsEvacuated;
     private bool hidersPerfectGame = true;
     private bool roundOver = false;
     private StatsRecorder statsRecorder = null;
@@ -115,6 +117,7 @@ public class GameController : MonoBehaviour
 
     private void Awake()
     {
+        EnsureSafeTriageZone();
         if (SystemArgs.GameParamsPath != null)
         {
             Debug.Log("Game controller configuration file: " + SystemArgs.GameParamsPath);
@@ -254,7 +257,15 @@ public class GameController : MonoBehaviour
                         if (!hiders[j].WasCaptured && Vector3.Distance(seekers[i].transform.position, hiders[j].transform.position) < captureDistance)
                         {
                             hidersCaptured++;
-                            hiders[j].WasCaptured = true;
+                            SurvivorRescueState sState = hiders[j].GetComponent<SurvivorRescueState>();
+                            if (sState != null)
+                            {
+                                sState.OnLocatedByDrone(seekers[i].transform);
+                            }
+                            else
+                            {
+                                hiders[j].WasCaptured = true;
+                            }
                             foreach (RewardInfo rewardInfo in rewards)
                             {
                                 if (rewardInfo.type == RewardInfo.Type.Capture)
@@ -264,10 +275,7 @@ public class GameController : MonoBehaviour
                                 }
                             }
 
-                            if (hidersCaptured < hiders.Count)
-                            {
-                                hiders[j].gameObject.SetActive(false);
-                            }
+                            // Keep survivor active to be escorted to Safe Triage Base!
                         }
                     }
                 }
@@ -277,7 +285,7 @@ public class GameController : MonoBehaviour
         // Visibility rewards must use the positions and line of sight from this step.
         UpdateRewards();
 
-        if (episodeTimer >= ActiveEpisodeSteps || (allowCapture && hidersCaptured == hiders.Count))
+        if (episodeTimer >= ActiveEpisodeSteps || (survivorsEvacuated >= hiders.Count && hiders.Count > 0))
         {
             EndEpisode();
         }
@@ -327,41 +335,52 @@ public class GameController : MonoBehaviour
             statsRecorder.Add("Environment/HidersCaptured", (float)hidersCaptured / hiders.Count());
         }
 
-        bool hidersWon = false;
-        if (winCondition == WinCondition.LineOfSight && hidersPerfectGame)
+        bool allRescued = hiders != null && hiders.Count > 0 && (survivorsEvacuated >= hiders.Count || hidersCaptured >= hiders.Count);
+        bool partialRescued = survivorsEvacuated > 0 || hidersCaptured > 0;
+        bool missionSuccess = allRescued;
+
+        if (allowCapture)
         {
-            hidersWon = true;
+            if (allRescued)
+            {
+                LastRoundSummary = string.Format("RESCUE SUCCESS: All {0}/{1} survivors evacuated safely!", hiders.Count, hiders.Count);
+            }
+            else if (partialRescued)
+            {
+                int count = Mathf.Max(survivorsEvacuated, hidersCaptured);
+                LastRoundSummary = string.Format("PARTIAL RESCUE: {0}/{1} survivors evacuated before collapse.", count, hiders.Count);
+            }
+            else
+            {
+                LastRoundSummary = string.Format("MISSION TIMEOUT: 0/{0} survivors reached before structural collapse.", hiders.Count);
+            }
         }
-        if (winCondition == WinCondition.Capture && hidersCaptured < seekersCaptureGoal)
+        else
         {
-            hidersWon = true;
+            float coverage = (1f - timeHidden) * 100f;
+            LastRoundSummary = string.Format("RECON COMPLETE: Area surveyed. Sensor sweep {0:0}%.", coverage);
         }
 
         if (inferenceMode)
         {
-            GenerationComparer.Instance?.RecordRound(hidersWon, timeHidden, hidersCaptured, hiders.Count);
+            GenerationComparer.Instance?.RecordRound(missionSuccess, timeHidden, Mathf.Max(survivorsEvacuated, hidersCaptured), hiders.Count);
         }
 
         if (winCondition != WinCondition.None)
         {
-
-            hidersGroup.AddGroupReward(hidersWon ? winConditionRewardMultiplier : -winConditionRewardMultiplier);
-            seekersGroup.AddGroupReward(hidersWon ? -winConditionRewardMultiplier : winConditionRewardMultiplier);
-            statsRecorder.Add("Environment/HiderWinRatio", hidersWon ? 1 : 0);
-            LastRoundSummary = allowCapture
-                ? string.Format("{0} won. Captured {1}/{2}.", hidersWon ? "Hiders" : "Seekers", hidersCaptured, hiders.Count)
-                : string.Format("{0} won. Hiders stayed hidden {1:0}% of the round.", hidersWon ? "Hiders" : "Seekers", timeHidden * 100f);
+            seekersGroup.AddGroupReward(missionSuccess ? winConditionRewardMultiplier : -winConditionRewardMultiplier);
+            statsRecorder.Add("Environment/RescueSuccessRatio", missionSuccess ? 1 : 0);
 
             if (debugLogMatchResult)
             {
                 switch (winCondition)
                 {
                     case WinCondition.LineOfSight:
-                        Debug.LogFormat("Team {0} won; Time percentage hidden - {1}", hidersWon ? "hiders" : "seekers", timeHidden * 100f);
+                        Debug.LogFormat("Mission Result: {0} | Sensor Coverage - {1:0}%", missionSuccess ? "Success" : "Timeout", (1f - timeHidden) * 100f);
                         break;
 
                     case WinCondition.Capture:
-                        Debug.LogFormat("Team {0} won; Hiders captured - {1} / {2}", hidersWon ? "hiders" : "seekers", hidersCaptured, hiders.Count());
+                        Debug.LogFormat("Mission Result: {0} | Survivors Evacuated - {1} / {2}", missionSuccess ? "Success" : "Timeout", survivorsEvacuated, hiders.Count);
                         break;
                 }
             }
@@ -397,6 +416,7 @@ public class GameController : MonoBehaviour
         stepsHidden = 0;
         hidersPerfectGame = true;
         hidersCaptured = 0;
+        survivorsEvacuated = 0;
         episodeTimer = 0;
 
         bool keepPlayerLayout = architectManager != null && architectManager.architectEnabled;
@@ -419,6 +439,15 @@ public class GameController : MonoBehaviour
         foreach (AgentActions hider in hiders)
         {
             hider.ResetAgent();
+            SurvivorRescueState sState = hider.GetComponent<SurvivorRescueState>();
+            if (sState == null)
+            {
+                sState = hider.gameObject.AddComponent<SurvivorRescueState>();
+            }
+            else
+            {
+                sState.ResetState();
+            }
             hidersGroup.RegisterAgent(hider.HideAndSeekAgent);
         }
         foreach (AgentActions seeker in seekers)
@@ -630,4 +659,32 @@ public class GameController : MonoBehaviour
             Gizmos.color = c;
         }
     }
+
+    private void EnsureSafeTriageZone()
+    {
+        if (SafeTriageZone.Instance == null && FindObjectOfType<SafeTriageZone>() == null)
+        {
+            GameObject triageObj = new GameObject("SafeTriageZone");
+            triageObj.transform.position = transform.position + new Vector3(arenaSize * 0.35f, 0f, arenaSize * 0.35f);
+            SafeTriageZone zone = triageObj.AddComponent<SafeTriageZone>();
+            zone.OnSurvivorEvacuated += HandleSurvivorEvacuated;
+        }
+        else if (SafeTriageZone.Instance != null)
+        {
+            SafeTriageZone.Instance.OnSurvivorEvacuated -= HandleSurvivorEvacuated;
+            SafeTriageZone.Instance.OnSurvivorEvacuated += HandleSurvivorEvacuated;
+        }
+    }
+
+
+    private void HandleSurvivorEvacuated(AgentActions agent)
+    {
+        survivorsEvacuated++;
+        seekersGroup?.AddGroupReward(2.0f);
+        if (survivorsEvacuated >= hiders.Count)
+        {
+            EndEpisode();
+        }
+    }
+
 }

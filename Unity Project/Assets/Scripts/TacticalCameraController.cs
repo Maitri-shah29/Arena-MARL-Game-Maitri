@@ -181,14 +181,14 @@ public class TacticalCameraController : MonoBehaviour
         GUILayout.BeginArea(new Rect(16, 16, 420, 110), boxStyle);
         GUILayout.BeginVertical();
 
-        GUILayout.Label("ARENA // MARL SIMULATION PROTOCOL", headerStyle);
+        GUILayout.Label("ResQ-MARL // DISASTER SEARCH & RESCUE PROTOCOL", headerStyle);
 
-        string phaseText = "WARMUP // FORTIFICATION PHASE";
+        string phaseText = "RECONNAISSANCE // SITE ASSESSMENT";
         Color phaseColor = new Color(0.2f, 0.85f, 1f);
         if (gameController != null && gameController.GracePeriodEnded)
         {
-            phaseText = "ACTIVE // HOSTILE PURSUIT ENGAGED";
-            phaseColor = new Color(1f, 0.2f, 0.25f);
+            phaseText = "ACTIVE // AUTONOMOUS SWARM RESCUE ENGAGED";
+            phaseColor = new Color(1f, 0.65f, 0.15f);
         }
 
         GUI.color = phaseColor;
