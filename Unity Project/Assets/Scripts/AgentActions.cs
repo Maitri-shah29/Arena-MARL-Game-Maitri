@@ -15,6 +15,9 @@ public class AgentActions : MonoBehaviour
 
     private Vector2 movementInput = Vector2.zero;
     private float rotationInput = 0f;
+    private Vector3? rescueDestination;
+    private float rescueStopDistance;
+    private bool approachOnly;
 
     private BoxHolding grabbedBox;
     private Quaternion targetRelativeRotation;
@@ -27,6 +30,11 @@ public class AgentActions : MonoBehaviour
     public bool IsHiding { get { return isHiding; } }
 
     public bool IsHolding { get { return grabbedBox != null; } }
+    // Escort destinations only; an approach toward a sighted survivor is reported by IsApproaching.
+    public bool HasRescueDestination => rescueDestination.HasValue && !approachOnly;
+    public bool IsApproaching => rescueDestination.HasValue && approachOnly;
+    // Pins a policy-driven agent in place (trapped survivors). Human-piloted agents ignore it.
+    public bool MovementLocked { get; set; }
     public bool WasCaptured { get; set; } = false;
 
     public GameController GameController { get; set; }
@@ -47,13 +55,61 @@ public class AgentActions : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!WasCaptured && (isHiding || GameController.GracePeriodEnded))
+        if (rescueDestination.HasValue)
+        {
+            ApplyRescueSteering();
+        }
+        else if (MovementLocked && (hideAndSeekAgent == null || hideAndSeekAgent.enabled))
+        {
+            // Zero input but still run Movement() so drag settles any bump from a drone.
+            movementInput = Vector2.zero;
+            rotationInput = 0f;
+        }
+
+        if (!rigidbody.isKinematic && !WasCaptured && (isHiding || GameController.GracePeriodEnded))
         {
             Movement();
         }
 
         movementInput = Vector2.zero;
         rotationInput = 0f;
+    }
+
+    private void ApplyRescueSteering()
+    {
+        movementInput = Vector2.zero;
+        rotationInput = 0f;
+        Vector3 direction = rescueDestination.Value - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= rescueStopDistance * rescueStopDistance)
+        {
+            return;
+        }
+
+        Vector3 desired = direction.normalized;
+        Vector3 local = transform.InverseTransformDirection(desired);
+        movementInput = new Vector2(local.x, local.z);
+        float angle = Vector3.SignedAngle(transform.forward, desired, Vector3.up);
+        rotationInput = Mathf.Clamp(angle / (rotationSpeed * Time.fixedDeltaTime), -1f, 1f);
+    }
+
+    public void SetRescueDestination(Vector3 destination, float stopDistance)
+    {
+        rescueDestination = destination;
+        rescueStopDistance = Mathf.Max(0f, stopDistance);
+        approachOnly = false;
+    }
+
+    public void SetApproachDestination(Vector3 destination, float stopDistance)
+    {
+        SetRescueDestination(destination, stopDistance);
+        approachOnly = true;
+    }
+
+    public void ClearRescueDestination()
+    {
+        rescueDestination = null;
+        approachOnly = false;
     }
 
     private void Movement()
@@ -161,6 +217,7 @@ public class AgentActions : MonoBehaviour
 
     public void ResetAgent()
     {
+        ClearRescueDestination();
         rigidbody.velocity = Vector3.zero;
         rigidbody.angularVelocity = Vector3.zero;
         grabbedBox = null;
@@ -173,6 +230,12 @@ public class AgentActions : MonoBehaviour
         behaviorParameters.BehaviorType = BehaviorType.Default;
         behaviorParameters.Model = null;
         behaviorParameters.DeterministicInference = false;
+    }
+
+    public void SwitchToHeuristic()
+    {
+        behaviorParameters.BehaviorType = BehaviorType.HeuristicOnly;
+        behaviorParameters.Model = null;
     }
 
     public void SwitchToInference(NNModel model)

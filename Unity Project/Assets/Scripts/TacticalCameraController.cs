@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class TacticalCameraController : MonoBehaviour
 {
-    public enum CameraViewMode { Isometric, TopDown, DynamicChase }
+    public enum CameraViewMode { Isometric, TopDown, DynamicChase, FirstPerson }
 
     [Header("Mode & Target")]
     [SerializeField] private CameraViewMode currentMode = CameraViewMode.Isometric;
@@ -53,6 +53,7 @@ public class TacticalCameraController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha1)) ApplyMode(CameraViewMode.Isometric);
         if (Input.GetKeyDown(KeyCode.Alpha2)) ApplyMode(CameraViewMode.TopDown);
         if (Input.GetKeyDown(KeyCode.Alpha3)) ApplyMode(CameraViewMode.DynamicChase);
+        if (Input.GetKeyDown(KeyCode.Alpha4)) ApplyMode(CameraViewMode.FirstPerson);
 
         // Orbit with Right Mouse Button
         if (Input.GetMouseButton(1))
@@ -96,6 +97,19 @@ public class TacticalCameraController : MonoBehaviour
 
     private void UpdateCameraTransform()
     {
+        if (currentMode == CameraViewMode.FirstPerson && gameController != null)
+        {
+            HumanPlayer player = FindObjectOfType<HumanPlayer>();
+            AgentActions target = player != null ? player.PossessedAgent : null;
+            if (target == null)
+                target = gameController.GetSeekers().FirstOrDefault(agent => agent != null && agent.gameObject.activeInHierarchy);
+            if (target != null)
+            {
+                transform.position = target.transform.position + Vector3.up * 0.6f;
+                transform.rotation = target.transform.rotation;
+                return;
+            }
+        }
         Vector3 focalPoint = arenaCenter;
 
         if (currentMode == CameraViewMode.DynamicChase && gameController != null)
