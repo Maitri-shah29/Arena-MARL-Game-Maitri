@@ -10,8 +10,8 @@ public class SeekerLaserScanner : MonoBehaviour
     private const float FovAngle = 67.5f;
 
     private Material laserMaterial;
-    private Color normalColor = new Color(1f, 0.08f, 0.15f, 0.5f);
-    private Color alertColor = new Color(1f, 0.8f, 0f, 0.85f);
+    private Color normalColor = new Color(1f, 0.65f, 0.15f, 0.65f);
+    private Color alertColor = new Color(1f, 0.95f, 0.2f, 0.95f);
 
     private void Awake()
     {
@@ -82,11 +82,16 @@ public class SeekerLaserScanner : MonoBehaviour
         // Close the loop back to origin
         laserRenderer.SetPosition(RayCount + 1, origin);
 
-        // Subtle pulsing laser effect
-        float pulse = 0.8f + 0.2f * Mathf.Sin(Time.time * 6f);
+        // Subtle pulsing laser effect using unscaled time
+        float pulse = 0.8f + 0.2f * Mathf.Sin(Time.unscaledTime * 6f);
         Color col = normalColor * pulse;
         col.a = normalColor.a;
         laserRenderer.startColor = col;
         laserRenderer.endColor = col;
+    }
+
+    public void SetScannerColor(Color c)
+    {
+        normalColor = c;
     }
 }

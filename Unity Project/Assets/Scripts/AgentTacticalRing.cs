@@ -41,7 +41,7 @@ public class AgentTacticalRing : MonoBehaviour
 
         baseColor = agentActions.IsHiding
             ? new Color(0f, 0.85f, 1f, 0.85f)    // Neon Cyan for Hiders
-            : new Color(1f, 0.12f, 0.2f, 0.85f);  // Crimson for Seekers
+            : new Color(1f, 0.55f, 0.05f, 0.9f);  // Emergency Hazard Amber for Rescue Drones
 
         mat.color = baseColor;
         ringRenderer.material = mat;
@@ -55,18 +55,30 @@ public class AgentTacticalRing : MonoBehaviour
         }
     }
 
+    public void SetBaseColor(Color newColor)
+    {
+        baseColor = newColor;
+    }
+
+    public void SetPulseSpeed(float speed)
+    {
+        pulseSpeed = speed;
+    }
+
     private void Update()
     {
         if (ringRenderer == null) return;
 
-        if (agentActions.WasCaptured)
+        SurvivorRescueState sState = GetComponent<SurvivorRescueState>();
+        if (agentActions.WasCaptured && (sState == null || sState.CurrentState != SurvivorRescueState.State.Rescued))
         {
             ringRenderer.enabled = false;
             return;
         }
+        ringRenderer.enabled = true;
 
-        // Pulse emission
-        float pulse = 0.7f + 0.3f * Mathf.Sin(Time.time * pulseSpeed);
+        // Pulse emission using unscaled time
+        float pulse = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * pulseSpeed);
         Color currentColor = baseColor * pulse;
         currentColor.a = baseColor.a;
         ringRenderer.startColor = currentColor;

@@ -221,11 +221,11 @@ public class HumanPlayer : MonoBehaviour
             return;
         }
 
-        string side = playingAsHider ? "Hider" : "Seeker";
-        string status = possessed != null ? "You: " + side : "No free " + side.ToLower();
+        string side = playingAsHider ? "Trapped Survivor" : "Rescue Drone";
+        string status = possessed != null ? "Operate: " + side : "Recon Camera Mode";
         string note = (!playingAsHider && possessed != null && !gameController.GracePeriodEnded)
-            ? "Seekers move after warmup"
-            : "Tab switches side";
+            ? "Rescue drones deploy after reconnaissance"
+            : "Tab switches operator";
 
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
@@ -234,18 +234,18 @@ public class HumanPlayer : MonoBehaviour
             alignment = TextAnchor.UpperLeft
         };
         title.normal.textColor = Color.white;
-        GUIStyle line = new GUIStyle(title) { fontSize = 15 };
+        GUIStyle line = new GUIStyle(title) { fontSize = 14 };
 
-        GUI.Box(new Rect(8f, 8f, 280f, 140f), "");
-        GUI.Label(new Rect(16f, 12f, 260f, 22f), "SCORE", title);
-        GUI.Label(new Rect(16f, 34f, 260f, 20f), status, line);
-        GUI.Label(new Rect(16f, 54f, 260f, 20f),
-            "Captured " + gameController.CapturedHiders + " / " + gameController.HiderCount, line);
-        GUI.Label(new Rect(16f, 74f, 260f, 20f),
-            "Hidden " + gameController.HiddenPercent.ToString("0") + "%", line);
+        GUI.Box(new Rect(8f, 8f, 320f, 150f), "");
+        GUI.Label(new Rect(16f, 12f, 290f, 22f), "DISASTER RESCUE MISSION", title);
+        GUI.Label(new Rect(16f, 34f, 290f, 20f), status, line);
+        GUI.Label(new Rect(16f, 54f, 290f, 20f),
+            "Survivors Located: " + gameController.CapturedHiders + " / " + gameController.HiderCount, line);
+        GUI.Label(new Rect(16f, 74f, 290f, 20f),
+            "Evacuated to Safe Base: " + gameController.EvacuatedCount + " / " + gameController.HiderCount, line);
         string footer = gameController.RoundSettled && !string.IsNullOrEmpty(gameController.LastRoundSummary)
             ? gameController.LastRoundSummary
             : note;
-        GUI.Label(new Rect(16f, 96f, 260f, 40f), footer, line);
+        GUI.Label(new Rect(16f, 98f, 290f, 45f), footer, line);
     }
 }

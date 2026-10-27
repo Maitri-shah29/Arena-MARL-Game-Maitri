@@ -59,3 +59,8 @@ crashlytics-build.properties
 Thumbs.db
 Desktop.ini
 
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

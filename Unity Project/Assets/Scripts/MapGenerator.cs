@@ -157,20 +157,26 @@ public class MapGenerator : MonoBehaviour
 
             Vector3 world = transform.TransformPoint(new Vector3(piece.px, piece.py, piece.pz));
             Quaternion rotation = transform.rotation * new Quaternion(piece.rx, piece.ry, piece.rz, piece.rw);
-            if (piece.kind == "box" && boxPrefabs != null && boxPrefabs.Length > 0)
+            if (piece.kind == "box" || piece.kind == "pillar" || piece.kind == "ramp" || piece.kind == "rubble")
             {
-                BoxHolding box = Instantiate(boxPrefabs[0], world, rotation, transform);
-                box.transform.localScale = new Vector3(piece.sx, piece.sy, piece.sz);
-                box.gameObject.AddComponent<ArchitectObject>();
-                if (piece.lockTeam == 1)
+                BoxHolding prefabToSpawn = null;
+                if (piece.kind == "pillar") prefabToSpawn = Resources.Load<BoxHolding>("Debris/Pillar_Debris");
+                else if (piece.kind == "ramp") prefabToSpawn = Resources.Load<BoxHolding>("Debris/Tilted_Slab_Debris");
+                else if (piece.kind == "rubble") prefabToSpawn = Resources.Load<BoxHolding>("Debris/Rubble_Mound_Debris");
+
+                if (prefabToSpawn == null && boxPrefabs != null && boxPrefabs.Length > 0)
+                    prefabToSpawn = boxPrefabs[0];
+
+                if (prefabToSpawn != null)
                 {
-                    box.ArchitectPreLock(true);
+                    BoxHolding spawned = Instantiate(prefabToSpawn, world, rotation, transform);
+                    spawned.name = piece.kind + "_Debris";
+                    spawned.transform.localScale = new Vector3(piece.sx, piece.sy, piece.sz);
+                    spawned.gameObject.AddComponent<ArchitectObject>();
+                    if (piece.lockTeam == 1) spawned.ArchitectPreLock(true);
+                    else if (piece.lockTeam == 2) spawned.ArchitectPreLock(false);
+                    layoutObjects.Add(spawned.gameObject);
                 }
-                else if (piece.lockTeam == 2)
-                {
-                    box.ArchitectPreLock(false);
-                }
-                layoutObjects.Add(box.gameObject);
             }
             else if (wallPrefab != null)
             {
