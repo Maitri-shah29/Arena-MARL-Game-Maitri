@@ -38,7 +38,7 @@ public static class PlayerLayout
             BoxHolding box = marker.GetComponent<BoxHolding>();
             pieces.Add(new PlayerLayoutFile.Piece
             {
-                kind = box != null ? "box" : "wall",
+                kind = box != null ? (marker.name.ToLower().Contains("pillar") ? "pillar" : marker.name.ToLower().Contains("ramp") || marker.name.ToLower().Contains("slab") ? "ramp" : marker.name.ToLower().Contains("rubble") ? "rubble" : "box") : (marker.name.ToLower().Contains("barricade") ? "barricade" : "wall"),
                 px = local.x,
                 py = local.y,
                 pz = local.z,

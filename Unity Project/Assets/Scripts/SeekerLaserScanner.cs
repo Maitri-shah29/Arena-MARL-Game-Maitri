@@ -10,8 +10,8 @@ public class SeekerLaserScanner : MonoBehaviour
     private const float FovAngle = 67.5f;
 
     private Material laserMaterial;
-    private Color normalColor = new Color(1f, 0.08f, 0.15f, 0.5f);
-    private Color alertColor = new Color(1f, 0.8f, 0f, 0.85f);
+    private Color normalColor = new Color(1f, 0.65f, 0.15f, 0.65f);
+    private Color alertColor = new Color(1f, 0.95f, 0.2f, 0.95f);
 
     private void Awake()
     {

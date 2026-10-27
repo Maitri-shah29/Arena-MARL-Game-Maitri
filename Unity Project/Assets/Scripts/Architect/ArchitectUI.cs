@@ -35,6 +35,9 @@ public class ArchitectUI : MonoBehaviour
     {
         ArchitectManager.Tool.SpawnWall,
         ArchitectManager.Tool.SpawnBox,
+        ArchitectManager.Tool.SpawnPillar,
+        ArchitectManager.Tool.SpawnRamp,
+        ArchitectManager.Tool.SpawnRubble,
         ArchitectManager.Tool.Demolish,
         ArchitectManager.Tool.PreLockHider
     };
@@ -142,6 +145,9 @@ public class ArchitectUI : MonoBehaviour
 
     private int GetCostWall()     => GetManagerIntField("costSpawnWall", 40);
     private int GetCostBox()      => GetManagerIntField("costSpawnBox", 25);
+    private int GetCostPillar()   => GetManagerIntField("costSpawnPillar", 30);
+    private int GetCostRamp()     => GetManagerIntField("costSpawnRamp", 25);
+    private int GetCostRubble()   => GetManagerIntField("costSpawnRubble", 20);
     private int GetCostDemolish() => GetManagerIntField("costDemolish", 35);
     private int GetCostPreLock()  => GetManagerIntField("costPreLock", 20);
     private int GetMaxEnergy()    => GetManagerIntField("energyBudgetPerRound", 100);
@@ -168,11 +174,14 @@ public class ArchitectUI : MonoBehaviour
     {
         switch (tool)
         {
-            case ArchitectManager.Tool.SpawnWall:     return "Wall";
-            case ArchitectManager.Tool.SpawnBox:      return "Box";
-            case ArchitectManager.Tool.Demolish:      return "Demolish";
-            case ArchitectManager.Tool.PreLockHider:  return "Pre-Lock";
-            case ArchitectManager.Tool.PreLockSeeker: return "Pre-Lock";
+            case ArchitectManager.Tool.SpawnWall:     return "Wall Barrier";
+            case ArchitectManager.Tool.SpawnBox:      return "Rubble Crate";
+            case ArchitectManager.Tool.SpawnPillar:   return "Fallen Pillar";
+            case ArchitectManager.Tool.SpawnRamp:     return "Tilted Slab";
+            case ArchitectManager.Tool.SpawnRubble:   return "Rubble Pile";
+            case ArchitectManager.Tool.Demolish:      return "Excavate";
+            case ArchitectManager.Tool.PreLockHider:  return "Shore/Lock";
+            case ArchitectManager.Tool.PreLockSeeker: return "Shore/Lock";
             default:                                  return tool.ToString();
         }
     }
@@ -185,17 +194,21 @@ public class ArchitectUI : MonoBehaviour
             ? GetToolDisplayName(architectManager.CurrentTool)
             : "Wall";
 
-        energyLabel.text = $"{currentEnergy}/{maxEnergy}  {toolName}";
+        energyLabel.text = $"INCIDENT ENERGY {currentEnergy}/{maxEnergy} | {toolName}";
     }
 
     private void UpdateButtonLabels()
     {
-        if (toolButtonTexts == null || toolButtonTexts.Length < 5) return;
+        if (toolButtonTexts == null || toolButtonTexts.Length < 9) return;
         toolButtonTexts[0].text = $"1  Wall ({GetCostWall()})";
-        toolButtonTexts[1].text = $"2  Box ({GetCostBox()})";
-        toolButtonTexts[2].text = $"3  Demolish ({GetCostDemolish()})";
-        toolButtonTexts[3].text = $"4  Pre-Lock ({GetCostPreLock()})";
-        toolButtonTexts[4].text = "Start Round  [Space]";
+        toolButtonTexts[1].text = $"2  Rubble Crate ({GetCostBox()})";
+        toolButtonTexts[2].text = $"3  Fallen Pillar ({GetCostPillar()})";
+        toolButtonTexts[3].text = $"4  Tilted Slab ({GetCostRamp()})";
+        toolButtonTexts[4].text = $"5  Rubble Pile ({GetCostRubble()})";
+        toolButtonTexts[5].text = $"6  Excavate ({GetCostDemolish()})";
+        toolButtonTexts[6].text = $"7  Shore/Lock ({GetCostPreLock()})";
+        toolButtonTexts[7].text = "Load Ruins Preset [L]";
+        toolButtonTexts[8].text = "START RESCUE [Space]";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -207,47 +220,51 @@ public class ArchitectUI : MonoBehaviour
         GameObject toolbar = CreatePanel("Toolbar",
             new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(0f, 1f),
-            new Vector2(8f, -8f), new Vector2(210f, 360f));
+            new Vector2(8f, -8f), new Vector2(215f, 510f));
 
         energyLabel = CreateTextChild(toolbar.transform, "EnergyLabel",
-            $"Energy {GetMaxEnergy()}/{GetMaxEnergy()}",
-            16, Color.white, TextAnchor.MiddleCenter,
-            new Vector2(0f, 0.88f), new Vector2(1f, 1f),
+            $"INCIDENT ENERGY {GetMaxEnergy()}/{GetMaxEnergy()}",
+            14, Color.white, TextAnchor.MiddleCenter,
+            new Vector2(0f, 0.92f), new Vector2(1f, 1f),
             new Vector2(6f, 0f), new Vector2(-6f, -2f));
         energyLabel.fontStyle = FontStyle.Bold;
 
         feedbackLabel = CreateTextChild(toolbar.transform, "FeedbackLabel",
-            "Click the floor to place",
-            13, new Color(1f, 0.95f, 0.7f, 1f), TextAnchor.MiddleCenter,
-            new Vector2(0f, 0.74f), new Vector2(1f, 0.88f),
+            "Survey site. Click floor to place debris.",
+            12, new Color(1f, 0.85f, 0.3f, 1f), TextAnchor.MiddleCenter,
+            new Vector2(0f, 0.82f), new Vector2(1f, 0.92f),
             new Vector2(6f, 0f), new Vector2(-6f, 0f));
 
-        toolButtons     = new Button[5];
-        toolHighlights  = new Image[5];
-        toolButtonTexts = new Text[5];
+        toolButtons     = new Button[9];
+        toolHighlights  = new Image[9];
+        toolButtonTexts = new Text[9];
 
         string[] initialLabels = new string[]
         {
             $"1  Wall ({GetCostWall()})",
-            $"2  Box ({GetCostBox()})",
-            $"3  Demolish ({GetCostDemolish()})",
-            $"4  Pre-Lock ({GetCostPreLock()})",
-            "Start  [Space]"
+            $"2  Rubble Crate ({GetCostBox()})",
+            $"3  Fallen Pillar ({GetCostPillar()})",
+            $"4  Tilted Slab ({GetCostRamp()})",
+            $"5  Rubble Pile ({GetCostRubble()})",
+            $"6  Excavate ({GetCostDemolish()})",
+            $"7  Shore/Lock ({GetCostPreLock()})",
+            "Load Ruins Preset [L]",
+            "START RESCUE [Space]"
         };
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 9; i++)
         {
             int idx = i;
-            float yOffset = 28f - i * 46f;
+            float yOffset = 90f - i * 44f;
 
             GameObject btnGo = CreateButton(toolbar.transform, $"Btn_{i}", initialLabels[i],
-                new Vector2(0f, yOffset), new Vector2(190f, 40f), out Text btnText);
+                new Vector2(0f, yOffset), new Vector2(195f, 38f), out Text btnText);
 
             toolButtons[i]     = btnGo.GetComponent<Button>();
             toolHighlights[i]  = btnGo.GetComponent<Image>();
             toolButtonTexts[i] = btnText;
 
-            if (i < 4)
+            if (i < 7)
             {
                 toolButtons[i].onClick.AddListener(() =>
                 {
@@ -255,9 +272,24 @@ public class ArchitectUI : MonoBehaviour
                         architectManager.SetTool(toolEnum[idx]);
                 });
             }
+            else if (i == 7)
+            {
+                // Preset button
+                Button presetBtn = toolButtons[i];
+                ColorBlock cb = presetBtn.colors;
+                cb.normalColor      = new Color(0.2f, 0.35f, 0.55f, 0.95f);
+                cb.highlightedColor = new Color(0.3f, 0.48f, 0.75f, 1f);
+                presetBtn.colors = cb;
+                toolHighlights[i].color = cb.normalColor;
+
+                presetBtn.onClick.AddListener(() =>
+                {
+                    architectManager?.LoadDisasterPreset();
+                });
+            }
             else
             {
-                // 5th button: Start Round [Space]
+                // 9th button: Start Rescue [Space]
                 startRoundButton = toolButtons[i];
                 ColorBlock cb = startRoundButton.colors;
                 cb.normalColor      = new Color(0.12f, 0.55f, 0.25f, 0.95f);
@@ -285,25 +317,25 @@ public class ArchitectUI : MonoBehaviour
             new Vector2(-8f, -8f), new Vector2(170f, 168f));
 
         CreateTextChild(sidePanel.transform, "SideLabel",
-            "Play as",
+            "Operate as",
             16, Color.white, TextAnchor.MiddleCenter,
             new Vector2(0f, 0.72f), new Vector2(1f, 1f),
             new Vector2(6f, 0f), new Vector2(-6f, -4f)).fontStyle = FontStyle.Bold;
 
         GameObject hiderButton = CreateButton(sidePanel.transform, "PlayHider", "Hider",
             new Vector2(0f, 10f), new Vector2(150f, 36f), out Text hiderLabel);
-        hiderLabel.text = "Hider";
+        hiderLabel.text = "Survivor";
         hiderSideImage = hiderButton.GetComponent<Image>();
         hiderButton.GetComponent<Button>().onClick.AddListener(() => FindObjectOfType<HumanPlayer>()?.SetSide(true));
 
         GameObject seekerButton = CreateButton(sidePanel.transform, "PlaySeeker", "Seeker",
             new Vector2(0f, -34f), new Vector2(150f, 36f), out Text seekerLabel);
-        seekerLabel.text = "Seeker";
+        seekerLabel.text = "Rescue Bot";
         seekerSideImage = seekerButton.GetComponent<Image>();
         seekerButton.GetComponent<Button>().onClick.AddListener(() => FindObjectOfType<HumanPlayer>()?.SetSide(false));
 
         CreateTextChild(hintPanel.transform, "HintLabel",
-            "Click the floor    R rotate    Z undo    Space starts",
+            "Click floor to place | R rotate | L load disaster ruins | Space starts rescue",
             14, Color.white, TextAnchor.MiddleCenter,
             Vector2.zero, Vector2.one,
             new Vector2(10f, 0f), new Vector2(-10f, 0f)).fontStyle = FontStyle.Bold;
@@ -315,7 +347,7 @@ public class ArchitectUI : MonoBehaviour
 
         ArchitectManager.Tool current = architectManager.CurrentTool;
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < toolEnum.Length && i < toolHighlights.Length; i++)
         {
             if (toolHighlights[i] == null) continue;
             bool active = (i < toolEnum.Length &&

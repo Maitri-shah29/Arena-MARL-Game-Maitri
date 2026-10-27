@@ -141,9 +141,9 @@ public class GenerationComparer : MonoBehaviour
                     : 0f;
                 text.Append("\n").Append(catalog.generations[i].label);
                 text.Append(": ").Append(tally.rounds).Append(" rounds, ");
-                text.Append(tally.hiderWins).Append(" hider wins");
+                text.Append(tally.hiderWins).Append(" survivor evacuations");
                 text.Append("\nHidden ").Append(hidden.ToString("0")).Append("%");
-                text.Append(" | Captured ").Append(captured.ToString("0")).Append("%");
+                text.Append(" | Rescued ").Append(captured.ToString("0")).Append("%");
             }
 
             if (!any)
@@ -221,7 +221,7 @@ public class GenerationComparer : MonoBehaviour
 
         GUIStyle title = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold, fontSize = 16 };
         GUIStyle result = new GUIStyle(GUI.skin.label) { wordWrap = true };
-        GUILayout.Label("COMPARE HIDER AI", title);
+        GUILayout.Label("COMPARE SWARM RESCUE AI", title);
         GUILayout.Label("Optional: compare saved AI models. Playing does not train them.", result);
         GUILayout.Label(CurrentLabel, title);
         GUILayout.Label("Seekers keep the same AI for a fair comparison.", result);

@@ -41,7 +41,7 @@ public class AgentTacticalRing : MonoBehaviour
 
         baseColor = agentActions.IsHiding
             ? new Color(0f, 0.85f, 1f, 0.85f)    // Neon Cyan for Hiders
-            : new Color(1f, 0.12f, 0.2f, 0.85f);  // Crimson for Seekers
+            : new Color(1f, 0.55f, 0.05f, 0.9f);  // Emergency Hazard Amber for Rescue Drones
 
         mat.color = baseColor;
         ringRenderer.material = mat;
