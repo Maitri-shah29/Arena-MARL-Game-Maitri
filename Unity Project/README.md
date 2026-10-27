@@ -1,4 +1,38 @@
 # ML-Agents Hide and Seek
+
+## ResQ disaster rescue preview
+
+Open `Assets/Scenes/ResQ_Disaster_Scene.unity` in Unity 2021.3.10f1 and press Play. This scene uses the dedicated `Survivor.prefab` and a green Safe Triage Zone trigger in the arena corner. Trapped survivors stay where they are until a drone finds them. A drone locates a survivor by getting within 1.2 metres after the reconnaissance period. That survivor then follows the assigned drone to the zone. The mission succeeds only when every survivor enters it. The HUD reports located and evacuated counts separately.
+
+The drones search with the existing hide-and-seek ONNX checkpoint. When a drone sees a trapped survivor in its sensor cone, the approach assist steers it straight to that survivor, with one drone per survivor. The C# escort state machine then handles evacuation. The assist drives in a straight line, so debris can still stall a drone. Clear the Game Controller's `droneApproachAssist` field to watch the policy alone. Navigating through debris reliably needs a checkpoint trained in the rescue training scene. The `Test` and `Training` scenes retain the original hide-and-seek rules.
+
+### Rescue controls and reports
+
+- In the build phase, choose **Collapsed School**, **Blocked Corridor**, or **Open Rubble Field** from the scenario selector, then press Space to deploy.
+- During a mission, press **H** to show or hide the 30 × 30 thermal sweep heatmap. Press **4** for a first-person drone camera; **1–3** select the other camera views.
+- Press **B**, or use **Run 10x Stress Test**, to run ten consecutive missions at 3× simulation speed. The panel reports mean time to rescue (MTTR), extraction rate, and sweep coverage per second.
+- After missions finish, press **X**, or click **Export Mission Audit**. New mission rows are appended to `DataSet/resq_mission_telemetry.csv` in the repository when running in the editor.
+
+### Train rescue drones
+
+Open `Assets/Scenes/ResQ_Training_Scene.unity` in Unity 2021.3.10f1. Survivors need no checkpoint here: they stay in place while trapped and are steered while escorted. The scene uses the `RescueDrone` behavior for the three drones, has no approach assist so the policy must learn to find survivors, and gives cooperative POCA rewards for first thermal sighting, escort, evacuation, and full mission success. The unrescued survivors impose a small per-step penalty. Start the trainer from the repository root, then press Play in Unity:
+
+```powershell
+& "C:\Users\Lenovo\.venvs\arena-marl-game-maitri\Scripts\mlagents-learn.exe" "Unity Project/config/resq_train.yaml" --run-id resq_poca_001
+```
+
+After training produces an ONNX checkpoint, assign it to the disaster scene's Game Controller `seekersCheckpoint` field. The original `arena_train.yaml` and `Training` scene remain for hide-and-seek training.
+
+### Optional webcam hand control
+
+The webcam sender uses a separate Python environment so MediaPipe does not change ML-Agents dependencies. On this computer, its interpreter is `C:\Users\Lenovo\.venvs\resq-handtracking\Scripts\python.exe`. Start the rescue scene and run:
+
+```powershell
+& "C:\Users\Lenovo\.venvs\resq-handtracking\Scripts\python.exe" webcam_hand_controller.py --preview
+```
+
+In build mode, pinch to place the current tool or drag an existing debris piece (press Z to undo a drag), move an open palm to pan the camera, and point to place a hazard marker. The sender uses localhost UDP port 5005. Mouse and keyboard controls continue to work when the webcam is off.
+
 ![screencap](/screencap/screencap1_360p.gif)
 
 Hide and seek is an asymmetric cooperative-competitive environment for [Unity ML-Agents](https://github.com/Unity-Technologies/ml-agents) framework. The agents are divided into two teams: hiders and seekers. The goal of seekers is to maintain a line of sight on hiders, while the goal of hiders is to remain hidden throughout the game. The environment supports the predator-prey gameplay variant, where the goal of seekers is to capture hiders instead of simply having a line of sight on them. This repository was used for training and evaluation in the upcoming paper FCSP: Fictitious Co-Self-Play for Team-based Multi-agent Reinforcement Learning (preprint available on request).

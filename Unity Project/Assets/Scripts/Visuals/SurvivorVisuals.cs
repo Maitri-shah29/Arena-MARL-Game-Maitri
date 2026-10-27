@@ -38,6 +38,7 @@ public class SurvivorVisuals : MonoBehaviour
         gameController = FindObjectOfType<GameController>();
         ResolveHiderIndex();
         ApplySurvivorSkin();
+        if (rescueState != null) rescueState.RefreshOriginalColors();
         SetupDistressRing();
         SetupTetherLine();
         RestyleBadgeFont();

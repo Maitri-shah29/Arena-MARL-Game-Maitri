@@ -6,6 +6,7 @@ public class SafeZonePerimeter : MonoBehaviour
     private GameObject visualContainer;
     private Material floorFillMat;
     private Material borderMat;
+    private Material crossMat;
     private TextMesh labelMesh;
 
     private static readonly Color SafeGreen = new Color(0.18f, 0.85f, 0.44f); // #2ECC71
@@ -77,6 +78,11 @@ public class SafeZonePerimeter : MonoBehaviour
         borderLr.SetPosition(2, new Vector3(h, 0f, h));
         borderLr.SetPosition(3, new Vector3(-h, 0f, h));
 
+        // Medical cross on the floor, with no collider to block evacuation.
+        crossMat = ShaderHelper.CreateUnlitMaterial(Color.white, "TriageCross");
+        CreateCrossBar("TriageCrossVertical", new Vector3(0.22f, 0.02f, 1.2f));
+        CreateCrossBar("TriageCrossHorizontal", new Vector3(1.2f, 0.02f, 0.22f));
+
         // 3. World-space label: "SAFE BASE // TRIAGE"
         GameObject labelObj = new GameObject("SafeZone_Label");
         labelObj.transform.SetParent(visualContainer.transform, false);
@@ -103,6 +109,19 @@ public class SafeZonePerimeter : MonoBehaviour
         }
     }
 
+    private void CreateCrossBar(string name, Vector3 scale)
+    {
+        GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bar.name = name;
+        bar.transform.SetParent(visualContainer.transform, false);
+        bar.transform.localPosition = new Vector3(0f, 0.07f, 0f);
+        bar.transform.localScale = scale;
+        Collider collider = bar.GetComponent<Collider>();
+        if (collider != null) Destroy(collider);
+        MeshRenderer renderer = bar.GetComponent<MeshRenderer>();
+        if (renderer != null) renderer.sharedMaterial = crossMat;
+    }
+
     private void Update()
     {
         if (floorFillMat == null) return;
@@ -118,5 +137,6 @@ public class SafeZonePerimeter : MonoBehaviour
         if (visualContainer != null) Destroy(visualContainer);
         if (floorFillMat != null) Destroy(floorFillMat);
         if (borderMat != null) Destroy(borderMat);
+        if (crossMat != null) Destroy(crossMat);
     }
 }

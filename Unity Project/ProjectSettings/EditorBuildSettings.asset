@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/Scenes/ResQ_Disaster_Scene.unity
     guid: eec6b511723a4816b8b6fe84a601e951
   - enabled: 1
+    path: Assets/Scenes/ResQ_Training_Scene.unity
+    guid: 243971a9a9f146349357690b2cf123a3
+  - enabled: 1
     path: Assets/Scenes/Test.unity
     guid: a07f19fa38b51884282cbd4481215551
   - enabled: 1

@@ -142,6 +142,15 @@ public class ArchitectCamera : MonoBehaviour
 
     private void HandlePan(float dt)
     {
+        if (architectManager != null)
+        {
+            HandTrackingReceiver hand = architectManager.GetComponent<HandTrackingReceiver>();
+            if (hand != null && hand.HasActiveHand && hand.OpenPalmDelta.sqrMagnitude > 0f)
+            {
+                Vector3 planarForward = Vector3.Cross(transform.right, Vector3.up).normalized;
+                pivot -= (transform.right * hand.OpenPalmDelta.x + planarForward * hand.OpenPalmDelta.y) * 25f;
+            }
+        }
         // Middle-mouse drag
         bool mmb = Input.GetMouseButton(2);
         // WASD while NOT holding right-mouse (right-mouse = orbit)

@@ -152,6 +152,12 @@ public class BoxHolding : MonoBehaviour
         transform.rotation = startRotation;
     }
 
+    public void SavePlacedPose()
+    {
+        startPosition = transform.position;
+        startRotation = transform.rotation;
+    }
+
     public void Reset()
     {
         owner = null;

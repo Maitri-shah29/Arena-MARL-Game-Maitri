@@ -13,7 +13,7 @@ using UnityEngine;
 //   • Validates placement via Physics.OverlapBox + bounds + agent clearance.
 //   • Exposes events for future FeatureExtractor / BookmakerAI subscribers.
 //   • Cleans up architect-spawned objects at round start.
-//   • Undo stack (spawns and pre-locks only; demolish is not undoable).
+//   • Undo stack (spawns, pre-locks and hand-drag moves; demolish is not undoable).
 
 [RequireComponent(typeof(GameController))]
 public class ArchitectManager : MonoBehaviour
@@ -145,6 +145,7 @@ public class ArchitectManager : MonoBehaviour
 
     // Feedback message shown by ArchitectUI
     public string FeedbackMessage { get; private set; } = "";
+    public string CurrentLayoutName { get; private set; } = "Custom Layout";
 
     // Cached ref to the GameController's agent lists (set by GameController)
     private GameController gameController;
@@ -154,6 +155,17 @@ public class ArchitectManager : MonoBehaviour
 
     // Active camera at phase start (restored on EndArchitectPhase)
     private TacticalCameraController tacticalCamCtrl;
+    private HandTrackingReceiver handReceiver;
+    private bool forceMouseCursor;
+    private Transform draggedDebris;
+    private Rigidbody draggedBody;
+    private bool draggedBodyWasKinematic;
+    private float draggedHeight;
+    private Vector3 draggedStartPosition;
+    private readonly List<GameObject> hazardMarkers = new List<GameObject>();
+    private Material hazardMarkerMaterial;
+    private Vector2 CursorPosition => !forceMouseCursor && handReceiver != null && handReceiver.HasActiveHand
+        ? handReceiver.HandScreenPosition : (Vector2)Input.mousePosition;
 
     // ─────────────────────────────────────────────────────────────────────────
     //  Undo entry
@@ -161,10 +173,12 @@ public class ArchitectManager : MonoBehaviour
 
     private class UndoEntry
     {
-        public enum Kind { Spawn, PreLock }
+        public enum Kind { Spawn, PreLock, Move }
         public Kind          kind;
         public GameObject    spawnedObject;   // for Spawn
         public BoxHolding    lockedBox;       // for PreLock
+        public Transform     movedObject;     // for Move
+        public Vector3       previousPosition; // for Move
         public int           cost;
     }
 
@@ -186,6 +200,7 @@ public class ArchitectManager : MonoBehaviour
         HandleToolHotkeys();
         UpdateGhost();
         HandleMouseClick();
+        HandleHandInput();
         HandleUndo();
     }
 
@@ -195,6 +210,7 @@ public class ArchitectManager : MonoBehaviour
         if (ghostObj != null) Destroy(ghostObj);
         if (ghostMatOk  != null) Destroy(ghostMatOk);
         if (ghostMatBad != null) Destroy(ghostMatBad);
+        if (hazardMarkerMaterial != null) Destroy(hazardMarkerMaterial);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -266,6 +282,9 @@ public class ArchitectManager : MonoBehaviour
     // they didn't register – preventing any null-ref or position confusion.
     private void CleanupArchitectObjects()
     {
+        foreach (GameObject marker in hazardMarkers)
+            if (marker != null) Destroy(marker);
+        hazardMarkers.Clear();
         foreach (GameObject go in architectSpawnedObjects)
         {
             if (go != null) Destroy(go);
@@ -462,6 +481,13 @@ public class ArchitectManager : MonoBehaviour
             UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
             return;
 
+        forceMouseCursor = true;
+        ExecuteCurrentTool();
+        forceMouseCursor = false;
+    }
+
+    private void ExecuteCurrentTool()
+    {
         switch (CurrentTool)
         {
             case Tool.SpawnWall:      TrySpawnWall();            break;
@@ -473,6 +499,108 @@ public class ArchitectManager : MonoBehaviour
             case Tool.PreLockHider:   TryPreLock(forHiders: true);  break;
             case Tool.PreLockSeeker:  TryPreLock(forHiders: false); break;
         }
+    }
+
+    private void HandleHandInput()
+    {
+        if (handReceiver == null) handReceiver = GetComponent<HandTrackingReceiver>();
+        if (handReceiver == null) return;
+        if (handReceiver.PointPressed && handReceiver.HasActiveHand && !IsHandOverUI())
+            PlaceHazardMarker();
+        if (handReceiver.PinchPressed && !IsHandOverUI())
+        {
+            Ray ray = Camera.main.ScreenPointToRay(handReceiver.HandScreenPosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 200f))
+            {
+                ArchitectObject marker = hit.collider.GetComponentInParent<ArchitectObject>();
+                if (marker != null)
+                {
+                    draggedDebris = marker.transform;
+                    draggedHeight = draggedDebris.position.y;
+                    draggedStartPosition = draggedDebris.position;
+                    draggedBody = marker.GetComponent<Rigidbody>();
+                    if (draggedBody != null)
+                    {
+                        draggedBodyWasKinematic = draggedBody.isKinematic;
+                        draggedBody.isKinematic = true;
+                    }
+                }
+                else
+                {
+                    ExecuteCurrentTool();
+                }
+            }
+        }
+        if (draggedDebris != null)
+        {
+            if (!handReceiver.Pinching)
+            {
+                if (draggedBody != null)
+                {
+                    draggedBody.velocity = Vector3.zero;
+                    draggedBody.angularVelocity = Vector3.zero;
+                    draggedBody.isKinematic = draggedBodyWasKinematic;
+                    BoxHolding box = draggedBody.GetComponent<BoxHolding>();
+                    if (box != null) box.SavePlacedPose();
+                }
+                if ((draggedDebris.position - draggedStartPosition).sqrMagnitude > 0.0001f)
+                {
+                    undoStack.Push(new UndoEntry
+                    {
+                        kind = UndoEntry.Kind.Move,
+                        movedObject = draggedDebris,
+                        previousPosition = draggedStartPosition
+                    });
+                    CurrentLayoutName = "Custom Layout";
+                    FeedbackMessage = "Debris moved. [Z] to undo.";
+                }
+                OnLayoutChanged?.Invoke();
+                draggedDebris = null;
+                draggedBody = null;
+            }
+            else if (ScreenRayToFloor(out Vector3 floorPoint))
+            {
+                Vector3 snapped = SnapToGrid(floorPoint);
+                float half = mapGenerator.MapSize * 0.5f - 1f;
+                draggedDebris.position = new Vector3(
+                    Mathf.Clamp(snapped.x, transform.position.x - half, transform.position.x + half),
+                    draggedHeight,
+                    Mathf.Clamp(snapped.z, transform.position.z - half, transform.position.z + half));
+            }
+        }
+    }
+
+    private bool IsHandOverUI()
+    {
+        var eventSystem = UnityEngine.EventSystems.EventSystem.current;
+        if (eventSystem == null) return false;
+        var pointer = new UnityEngine.EventSystems.PointerEventData(eventSystem)
+        {
+            position = handReceiver.HandScreenPosition
+        };
+        var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+        eventSystem.RaycastAll(pointer, hits);
+        return hits.Count > 0;
+    }
+
+    private void PlaceHazardMarker()
+    {
+        if (!ScreenRayToFloor(out Vector3 position)) return;
+        GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        marker.name = "Structural Hazard Marker";
+        marker.transform.position = SnapToGrid(position) + Vector3.up * 0.06f;
+        marker.transform.localScale = new Vector3(0.28f, 0.06f, 0.28f);
+        Collider col = marker.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        MeshRenderer renderer = marker.GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            if (hazardMarkerMaterial == null)
+                hazardMarkerMaterial = ShaderHelper.CreateUnlitMaterial(new Color(1f, 0.15f, 0.08f), "HazardMarker");
+            renderer.sharedMaterial = hazardMarkerMaterial;
+        }
+        hazardMarkers.Add(marker);
+        FeedbackMessage = "Hazard marker placed.";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -560,7 +688,7 @@ public class ArchitectManager : MonoBehaviour
     {
         if (!ChargeBudget(costDemolish, "Demolish")) return;
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        Ray ray = Camera.main.ScreenPointToRay(CursorPosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 200f))
         {
             RefundBudget(costDemolish);
@@ -607,7 +735,7 @@ public class ArchitectManager : MonoBehaviour
     {
         if (!ChargeBudget(costPreLock, "Pre-Lock")) return;
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        Ray ray = Camera.main.ScreenPointToRay(CursorPosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 200f))
         {
             RefundBudget(costPreLock);
@@ -668,10 +796,32 @@ public class ArchitectManager : MonoBehaviour
                 if (entry.lockedBox != null)
                     entry.lockedBox.ArchitectUnlock();
                 break;
+
+            case UndoEntry.Kind.Move:
+                if (entry.movedObject != null)
+                {
+                    if (entry.movedObject == draggedDebris)
+                    {
+                        if (draggedBody != null) draggedBody.isKinematic = draggedBodyWasKinematic;
+                        draggedDebris = null;
+                        draggedBody = null;
+                    }
+                    entry.movedObject.position = entry.previousPosition;
+                    Rigidbody movedBody = entry.movedObject.GetComponent<Rigidbody>();
+                    if (movedBody != null)
+                    {
+                        movedBody.velocity = Vector3.zero;
+                        movedBody.angularVelocity = Vector3.zero;
+                    }
+                    BoxHolding movedBox = entry.movedObject.GetComponent<BoxHolding>();
+                    if (movedBox != null) movedBox.SavePlacedPose();
+                }
+                break;
         }
 
         energyRemaining += entry.cost;
-        if (actionsThisRound.Count > 0)
+        // Moves cost nothing and are not logged in actionsThisRound.
+        if (entry.kind != UndoEntry.Kind.Move && actionsThisRound.Count > 0)
             actionsThisRound.RemoveAt(actionsThisRound.Count - 1);
 
         FeedbackMessage = $"Undone. Energy: {energyRemaining}";
@@ -732,7 +882,7 @@ public class ArchitectManager : MonoBehaviour
     // Projects a screen-space ray onto the floor plane and returns the world point.
     private bool ScreenRayToFloor(out Vector3 worldPoint)
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        Ray ray = Camera.main.ScreenPointToRay(CursorPosition);
         float dist;
         if (floorPlane.Raycast(ray, out dist))
         {
@@ -773,6 +923,7 @@ public class ArchitectManager : MonoBehaviour
 
     private void RecordAction(ArchitectActionRecord.ActionType type, Vector3 pos, int cost)
     {
+        CurrentLayoutName = "Custom Layout";
         actionsThisRound.Add(new ArchitectActionRecord
         {
             actionType = type,
@@ -907,7 +1058,16 @@ public class ArchitectManager : MonoBehaviour
 
     public void LoadDisasterPreset()
     {
-        string presetPath = System.IO.Path.Combine(Application.dataPath, "../config/collapsed_building_preset.json");
+        LoadDisasterPreset("collapsed_building_preset");
+    }
+
+    public void LoadDisasterPreset(string presetId)
+    {
+        if (presetId != "collapsed_building_preset"
+            && presetId != "blocked_corridor_preset"
+            && presetId != "open_rubble_field_preset")
+            return;
+        string presetPath = System.IO.Path.Combine(Application.dataPath, "../config/" + presetId + ".json");
         string json = "";
         if (System.IO.File.Exists(presetPath))
         {
@@ -915,7 +1075,7 @@ public class ArchitectManager : MonoBehaviour
         }
         else
         {
-            TextAsset ta = Resources.Load<TextAsset>("Presets/collapsed_building_preset");
+            TextAsset ta = Resources.Load<TextAsset>("Presets/" + presetId);
             if (ta != null) json = ta.text;
         }
 
@@ -966,7 +1126,9 @@ public class ArchitectManager : MonoBehaviour
         }
 
         placedThisRound = architectSpawnedObjects.Count;
-        FeedbackMessage = "Earthquake Ruins loaded! Space starts rescue.";
+        CurrentLayoutName = presetId == "collapsed_building_preset" ? "Collapsed School"
+            : presetId == "blocked_corridor_preset" ? "Blocked Corridor" : "Open Rubble Field";
+        FeedbackMessage = CurrentLayoutName + " loaded. Space starts rescue.";
         OnLayoutChanged?.Invoke();
     }
 

@@ -25,6 +25,11 @@ public class ArchitectUI : MonoBehaviour
     private GameObject bottomHintPanel;
     private GameObject missionResultPanel;
     private GameObject sidePanel;
+    private GameObject actionPanel;
+    private GameObject[] presetOptions;
+    private Text coverageText;
+    private Text benchmarkText;
+    private Text exportText;
 
     // Top Bar UI
     private Text titleText;
@@ -143,6 +148,7 @@ public class ArchitectUI : MonoBehaviour
         UpdateTopBarData();
         UpdateTriageBoardData();
         UpdateMissionResultBanner();
+        UpdateOperationalActions();
 
         if (isInArchitectPhase && architectManager != null)
         {
@@ -201,6 +207,7 @@ public class ArchitectUI : MonoBehaviour
         BuildRightTriageBoard();
         BuildBottomHintBar();
         BuildSidePanel();
+        BuildActionPanel();
         BuildMissionResultBanner();
 
         // Initial visibility
@@ -278,7 +285,7 @@ public class ArchitectUI : MonoBehaviour
         leftToolPanel = CreatePanel("ToolColumn",
             new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(0f, 1f),
-            new Vector2(20f, -80f), new Vector2(260f, 680f),
+            new Vector2(20f, -80f), new Vector2(260f, 750f),
             DarkPanelColor);
 
         // Header label
@@ -324,9 +331,9 @@ public class ArchitectUI : MonoBehaviour
             });
         }
 
-        // Preset Button: [L] Load Collapsed Building (Amendment 3)
+        // Scenario selector. The choices expand beneath this button.
         GameObject presetGo = CreateButton(leftToolPanel.transform, "PresetBtn",
-            "[L] Load Collapsed Building",
+            "Choose Disaster Scenario",
             new Vector2(12f, -85f - (Tools.Length * 48f) - 6f), new Vector2(236f, 40f),
             out Text presetText);
         presetButton = presetGo.GetComponent<Button>();
@@ -336,12 +343,37 @@ public class ArchitectUI : MonoBehaviour
         pcb.highlightedColor = new Color(0.25f, 0.40f, 0.65f, 1f);
         presetButton.colors = pcb;
         presetGo.GetComponent<Image>().color = pcb.normalColor;
-        presetButton.onClick.AddListener(() => architectManager?.LoadDisasterPreset());
+        presetButton.onClick.AddListener(() =>
+        {
+            bool show = !presetOptions[0].activeSelf;
+            foreach (GameObject option in presetOptions) option.SetActive(show);
+        });
+        string[] presetIds =
+        {
+            "collapsed_building_preset", "blocked_corridor_preset", "open_rubble_field_preset"
+        };
+        string[] presetLabels = { "Collapsed School", "Blocked Corridor", "Open Rubble Field" };
+        presetOptions = new GameObject[presetIds.Length];
+        for (int i = 0; i < presetIds.Length; i++)
+        {
+            string id = presetIds[i];
+            GameObject option = CreateButton(leftToolPanel.transform, "PresetOption_" + i,
+                presetLabels[i], new Vector2(12f, -523f - i * 42f),
+                new Vector2(236f, 38f), out Text optionLabel);
+            optionLabel.fontSize = 13;
+            option.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                architectManager?.LoadDisasterPreset(id);
+                foreach (GameObject entry in presetOptions) entry.SetActive(false);
+            });
+            presetOptions[i] = option;
+            option.SetActive(false);
+        }
 
         // Deploy Team Button [SPACE] (Vibrant Green)
         GameObject deployGo = CreateButton(leftToolPanel.transform, "DeployBtn",
             "DEPLOY TEAM [SPACE]",
-            new Vector2(12f, -85f - (Tools.Length * 48f) - 54f), new Vector2(236f, 48f),
+            new Vector2(12f, -656f), new Vector2(236f, 48f),
             out Text deployText);
         deployButton = deployGo.GetComponent<Button>();
         deployText.fontSize = 15;
@@ -447,6 +479,70 @@ public class ArchitectUI : MonoBehaviour
         survBtn.GetComponent<Button>().onClick.AddListener(() => FindObjectOfType<HumanPlayer>()?.SetSide(true));
     }
 
+    private void BuildActionPanel()
+    {
+        actionPanel = CreatePanel("MissionActions",
+            new Vector2(1f, 1f), new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(-20f, -590f), new Vector2(280f, 260f),
+            DarkPanelColor);
+        coverageText = CreateText(actionPanel.transform, "ThermalCoverage",
+            "THERMAL SWEEP: 0%", 13, CyanAccent, TextAnchor.MiddleLeft,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(14f, -34f), new Vector2(-10f, -6f));
+        GameObject heatButton = CreateButton(actionPanel.transform, "HeatmapToggle",
+            "Toggle Heatmap [H]", new Vector2(12f, -43f),
+            new Vector2(256f, 34f), out Text heatLabel);
+        heatButton.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            if (gameController != null)
+                gameController.GetComponent<SpatialThermalHeatmap>()?.Toggle();
+        });
+        GameObject batchButton = CreateButton(actionPanel.transform, "BatchButton",
+            "Run 10x Stress Test [B]", new Vector2(12f, -81f),
+            new Vector2(256f, 34f), out Text batchLabel);
+        batchButton.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            if (gameController != null)
+                gameController.GetComponent<RescueBatchRunner>()?.RunBatchMission(10);
+        });
+        GameObject exportButton = CreateButton(actionPanel.transform, "ExportAuditButton",
+            "Export Mission Audit [X]", new Vector2(12f, -119f),
+            new Vector2(256f, 34f), out Text exportLabel);
+        exportButton.GetComponent<Button>().onClick.AddListener(() =>
+        {
+            if (gameController != null)
+                gameController.GetComponent<MissionTelemetryExporter>()?.ExportAudit();
+        });
+        benchmarkText = CreateText(actionPanel.transform, "BatchSummary",
+            "Batch idle", 11, TextWhite, TextAnchor.MiddleLeft,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(14f, -202f), new Vector2(-10f, -158f));
+        benchmarkText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        exportText = CreateText(actionPanel.transform, "ExportStatus",
+            "Audit ready after a mission", 11, TextDim, TextAnchor.MiddleLeft,
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(14f, -246f), new Vector2(-10f, -208f));
+        exportText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        actionPanel.SetActive(gameController != null && gameController.RescueMode);
+    }
+
+    private void UpdateOperationalActions()
+    {
+        if (gameController == null || actionPanel == null || !actionPanel.activeSelf) return;
+        SpatialThermalHeatmap heatmap = gameController.GetComponent<SpatialThermalHeatmap>();
+        if (coverageText != null && heatmap != null)
+            coverageText.text = string.Format("THERMAL SWEEP: {0:0.0}%", heatmap.CoveragePercent);
+        RescueBatchRunner batch = gameController.GetComponent<RescueBatchRunner>();
+        if (benchmarkText != null && batch != null)
+            benchmarkText.text = batch.LatestSummary.Length > 0 ? batch.LatestSummary : "Batch idle";
+        MissionTelemetryExporter exporter = gameController.GetComponent<MissionTelemetryExporter>();
+        if (exportText != null && exporter != null)
+            exportText.text = exporter.LastExportMessage.StartsWith("Mission audit saved")
+                ? "Audit saved to DataSet/resq_mission_telemetry.csv"
+                : exporter.LastExportMessage.Length > 0 ? exporter.LastExportMessage : "Audit ready after a mission";
+    }
+
     private void BuildBottomHintBar()
     {
         // Bottom Hint Bar: Anchored bottom-center, width 720px, height 36px
@@ -457,7 +553,7 @@ public class ArchitectUI : MonoBehaviour
             DarkPanelColor);
 
         Text hintText = CreateText(bottomHintPanel.transform, "HintText",
-            "Click floor to place  |  [R] Rotate  |  [Z] Undo  |  [L] Load Preset  |  [Space] Deploy Team",
+            "Click floor to place  |  [R] Rotate  |  [Z] Undo  |  [L] School Preset  |  [Space] Deploy",
             13, TextWhite, TextAnchor.MiddleCenter,
             Vector2.zero, Vector2.one,
             new Vector2(12f, 0f), new Vector2(-12f, 0f));
@@ -554,9 +650,8 @@ public class ArchitectUI : MonoBehaviour
 
         int totalSurvivors = gameController.HiderCount;
         int evacuated = gameController.EvacuatedCount;
-        int located = DisasterThemeManager.Instance != null
-            ? DisasterThemeManager.Instance.GetLocatedSurvivorCount()
-            : gameController.CapturedHiders;
+        int located = gameController.RescueMode
+            ? gameController.LocatedCount : gameController.CapturedHiders;
 
         // Calculate currently escorting survivors
         int escorting = 0;

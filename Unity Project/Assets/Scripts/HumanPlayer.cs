@@ -23,6 +23,7 @@ public class HumanPlayer : MonoBehaviour
 
     public bool PlayingAsHider => playingAsHider;
     public bool HasControl => possessed != null;
+    public AgentActions PossessedAgent => possessed;
 
     public void Setup(GameController controller, ArchitectManager architectManager, NNModel hidersCheckpoint, NNModel seekersCheckpoint)
     {
@@ -33,6 +34,7 @@ public class HumanPlayer : MonoBehaviour
         }
 
         gameController = controller;
+        if (controller.RescueMode) playingAsHider = false;
         architect = architectManager;
         hiderModel = hidersCheckpoint;
         seekerModel = seekersCheckpoint;
@@ -97,7 +99,8 @@ public class HumanPlayer : MonoBehaviour
             SetSide(!playingAsHider);
         }
 
-        if (possessed == null || possessed.WasCaptured || !possessed.gameObject.activeInHierarchy)
+        if (possessed == null || possessed.WasCaptured || !possessed.gameObject.activeInHierarchy
+            || (gameController.RescueMode && possessed.HasRescueDestination))
         {
             if (possessed != null)
             {
@@ -174,6 +177,10 @@ public class HumanPlayer : MonoBehaviour
         {
             possessed.HideAndSeekAgent.enabled = false;
         }
+        if (possessed.IsApproaching)
+        {
+            possessed.ClearRescueDestination();
+        }
     }
 
     private void ReleaseControl()
@@ -202,6 +209,12 @@ public class HumanPlayer : MonoBehaviour
         {
             if (agent != null && agent.gameObject.activeInHierarchy && !agent.WasCaptured)
             {
+                if (gameController.RescueMode)
+                {
+                    if (agent.HasRescueDestination) continue;
+                    SurvivorRescueState state = hider ? agent.GetComponent<SurvivorRescueState>() : null;
+                    if (state != null && state.CurrentState != SurvivorRescueState.State.Trapped) continue;
+                }
                 return agent;
             }
         }
@@ -214,6 +227,10 @@ public class HumanPlayer : MonoBehaviour
         {
             return;
         }
+        if (gameController.RescueMode && FindObjectOfType<ArchitectUI>() != null)
+        {
+            return;
+        }
 
         bool building = architect != null && architect.IsArchitectPhase;
         if (building)
@@ -221,11 +238,14 @@ public class HumanPlayer : MonoBehaviour
             return;
         }
 
-        string side = playingAsHider ? "Trapped Survivor" : "Rescue Drone";
-        string status = possessed != null ? "Operate: " + side : "Recon Camera Mode";
+        bool rescue = gameController.RescueMode;
+        string side = rescue
+            ? (playingAsHider ? "Trapped Survivor" : "Rescue Drone")
+            : (playingAsHider ? "Hider" : "Seeker");
+        string status = possessed != null ? "Operate: " + side : "Spectator Mode";
         string note = (!playingAsHider && possessed != null && !gameController.GracePeriodEnded)
-            ? "Rescue drones deploy after reconnaissance"
-            : "Tab switches operator";
+            ? (rescue ? "Rescue drones deploy after reconnaissance" : "Seekers move after the grace period")
+            : "Tab switches sides";
 
         GUIStyle title = new GUIStyle(GUI.skin.label)
         {
@@ -237,12 +257,15 @@ public class HumanPlayer : MonoBehaviour
         GUIStyle line = new GUIStyle(title) { fontSize = 14 };
 
         GUI.Box(new Rect(8f, 8f, 320f, 150f), "");
-        GUI.Label(new Rect(16f, 12f, 290f, 22f), "DISASTER RESCUE MISSION", title);
+        GUI.Label(new Rect(16f, 12f, 290f, 22f), rescue ? "DISASTER RESCUE MISSION" : "HIDE AND SEEK", title);
         GUI.Label(new Rect(16f, 34f, 290f, 20f), status, line);
         GUI.Label(new Rect(16f, 54f, 290f, 20f),
-            "Survivors Located: " + gameController.CapturedHiders + " / " + gameController.HiderCount, line);
+            (rescue ? "Survivors Located: " + gameController.LocatedCount : "Hiders Captured: " + gameController.CapturedHiders)
+            + " / " + gameController.HiderCount, line);
         GUI.Label(new Rect(16f, 74f, 290f, 20f),
-            "Evacuated to Safe Base: " + gameController.EvacuatedCount + " / " + gameController.HiderCount, line);
+            rescue
+                ? "Evacuated to Safe Base: " + gameController.EvacuatedCount + " / " + gameController.HiderCount
+                : string.Format("Hidden: {0:0}%", gameController.HiddenPercent), line);
         string footer = gameController.RoundSettled && !string.IsNullOrEmpty(gameController.LastRoundSummary)
             ? gameController.LastRoundSummary
             : note;

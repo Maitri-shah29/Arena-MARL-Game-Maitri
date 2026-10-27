@@ -19,21 +19,17 @@ public class SafeTriageZone : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-
+        Instance = this;
+        gameObject.layer = LayerMask.NameToLayer("Ignore Raycast");
         SetupTrigger();
         SetupVisualPerimeter();
     }
 
     private void OnDestroy()
     {
-        if (Instance == this)
-        {
-            Instance = null;
-        }
+        if (Instance == this) Instance = null;
+        if (perimeterLine != null && perimeterLine.material != null)
+            Destroy(perimeterLine.material);
     }
 
     private void SetupTrigger()
@@ -82,13 +78,22 @@ public class SafeTriageZone : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        TryEvacuate(other);
+    }
+
+    private void OnTriggerStay(Collider other)
+    {
+        TryEvacuate(other);
+    }
+
+    private void TryEvacuate(Collider other)
+    {
         AgentActions agent = other.GetComponent<AgentActions>();
         if (agent != null && agent.IsHiding)
         {
             SurvivorRescueState survivor = other.GetComponent<SurvivorRescueState>();
-            if (survivor != null && survivor.CurrentState == SurvivorRescueState.State.BeingEscorted)
+            if (survivor != null && survivor.MarkAsSafelyRescued())
             {
-                survivor.MarkAsSafelyRescued();
                 OnSurvivorEvacuated?.Invoke(agent);
             }
         }
