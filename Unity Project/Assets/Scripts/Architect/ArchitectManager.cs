@@ -286,6 +286,7 @@ public class ArchitectManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha5)) SetTool(Tool.SpawnRubble);
         if (Input.GetKeyDown(KeyCode.Alpha6)) SetTool(Tool.Demolish);
         if (Input.GetKeyDown(KeyCode.Alpha7)) SetTool(Tool.PreLockHider);
+        if (Input.GetKeyDown(KeyCode.Alpha8)) SetTool(Tool.PreLockSeeker);
 
         // R → rotate debris by 90°
         if (Input.GetKeyDown(KeyCode.R)) wallRotationStep = (wallRotationStep + 1) % 4;
