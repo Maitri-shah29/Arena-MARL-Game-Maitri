@@ -19,7 +19,6 @@ public class AgentActions : MonoBehaviour
     private float rescueStopDistance;
     private bool approachOnly;
 
-    private AgentObstacleAvoidance obstacleAvoidance;
     private BoxHolding grabbedBox;
     private Quaternion targetRelativeRotation;
 
@@ -52,11 +51,6 @@ public class AgentActions : MonoBehaviour
         {
             gameObject.AddComponent<SeekerLaserScanner>();
         }
-        obstacleAvoidance = GetComponent<AgentObstacleAvoidance>();
-        if (obstacleAvoidance == null)
-        {
-            obstacleAvoidance = gameObject.AddComponent<AgentObstacleAvoidance>();
-        }
     }
 
     private void FixedUpdate()
@@ -85,14 +79,6 @@ public class AgentActions : MonoBehaviour
     {
         movementInput = Vector2.zero;
         rotationInput = 0f;
-        if (!rescueDestination.HasValue) return;
-
-        if (obstacleAvoidance != null)
-        {
-            obstacleAvoidance.ComputeRescueSteering(rescueDestination.Value, rescueStopDistance, rotationSpeed, out movementInput, out rotationInput);
-            return;
-        }
-
         Vector3 direction = rescueDestination.Value - transform.position;
         direction.y = 0f;
         if (direction.sqrMagnitude <= rescueStopDistance * rescueStopDistance)
@@ -128,11 +114,6 @@ public class AgentActions : MonoBehaviour
 
     private void Movement()
     {
-        if (!rescueDestination.HasValue && obstacleAvoidance != null)
-        {
-            obstacleAvoidance.FilterPolicyMovement(ref movementInput, ref rotationInput, rotationSpeed);
-        }
-
         // Apply movement
         Vector2 direction = movementInput.normalized;
         Vector3 force = direction.x * transform.right + direction.y * transform.forward;
@@ -237,7 +218,6 @@ public class AgentActions : MonoBehaviour
     public void ResetAgent()
     {
         ClearRescueDestination();
-        if (obstacleAvoidance != null) obstacleAvoidance.ResetState();
         rigidbody.velocity = Vector3.zero;
         rigidbody.angularVelocity = Vector3.zero;
         grabbedBox = null;
