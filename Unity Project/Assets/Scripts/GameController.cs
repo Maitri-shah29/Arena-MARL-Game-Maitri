@@ -218,6 +218,8 @@ public class GameController : MonoBehaviour
         }
         if (RescueMode)
         {
+            if (GetComponent<RescuePathfinder>() == null)
+                gameObject.AddComponent<RescuePathfinder>();
             if (GetComponent<SpatialThermalHeatmap>() == null)
                 gameObject.AddComponent<SpatialThermalHeatmap>();
             if (!RescueTraining)
